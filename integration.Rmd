@@ -1,0 +1,87 @@
+---
+title: "Integration"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+\begin{equation}
+I(\vec{x}) := \exp \left[-\frac1T \sum_{i < j}^N \dfrac{q_i q_j}{|\mathbf{r}_i - \mathbf{r}_j|} \,+\, \dfrac{1}{|\mathbf{r}_i - \mathbf{r}_j|^8} \right]
+\end{equation}
+\begin{equation}
+Z = \int_V \prod^N_{i=1} d\mathbf{r}_i I(\vec{x})
+\end{equation}
+
+
+```{r}
+
+I_func <- function(x, q, t=1, dim=3) {
+  # Coulomb part (a)
+  n <- length(q)
+  a <- 0
+  for (i in c(1:(n-1))) {
+    for (j in c((i+1):n)) {
+      a <- a + q[i] * q[j] / sqrt(sum((x[i,] - x[j,])**2))
+    }
+  }
+  
+  # Hard shell part (b)
+  b <- 0
+  for (i in c(1:(n-1))) {
+    for (j in c((i+1):n)) {
+      b <- b + 1 / (sqrt(sum((x[i,] - x[j,])**2)))**8
+    }
+  }
+  
+  res <- a + b
+  return(exp(-1/t*res))
+}
+
+g <- function(x,vol) {
+  return(vol)
+}
+
+Z_func <- function(t, N=1e5, nPart, vol, d=3) {
+  # Create N phasespace points of nPart particles in d dimensions. The space is limited by the volume vol.
+  x <- array(data = runif(N*nPart*d, min=0, max=vol**(1/d)), dim = c(N, nPart, d))
+  q <- array(data = sample(c(-1,+1), size=N*nPart, replace=TRUE), dim = c(N, nPart))
+
+  res <- rep(0, N)
+  for (i in c(1:N)) {
+    res[i] <- I_func(x[i,,], q[i,], t, dim) / g(x[i,,],vol)
+  }
+  return(c(mean(res), sqrt(var(res)/N)))
+}
+```
+
+```{r}  
+d     <- 3    # Number of dimensions
+nPart <- 20   # Number of particles
+vol   <- 100  # Volume of space
+N     <- 6e4  # Number of iterations
+
+t <- seq(from=0.29, to=0.31, by=0.002)
+Z <- rep(0, length(t))
+Z_err <- rep(0, length(t))
+
+c <- 1
+for (i in c(1:length(t))) {
+  if (i > c*length(t)/4) {
+    print(c*25)
+    c <- c + 1
+  }
+  v    <- Z_func(t[i], N, nPart, vol, d)
+  Z[i] <- v[1]
+  Z_err[i] <- v[2]
+}
+```
+```{r}
+print(max(Z))
+print(log(max(Z),base=10))
+plot(t, Z, type='n', log="y", ylim=c(0.01,5))
+arrows(x0=t, y0=Z-Z_err, x1=t, y1=Z+Z_err, length=0.05, angle=90, code=3)
+
+```
+
