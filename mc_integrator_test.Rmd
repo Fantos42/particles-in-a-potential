@@ -1,0 +1,91 @@
+---
+title: "Monte Carlo Integrator"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Build integration code and test on function \(I(\vec{x}) = 1-|x|^2\).
+
+```{r}
+
+I_func <- function(x) {
+  return(1 - sum(x**2))
+}
+
+g <- function(x) {
+  return(2**(-length(x)))
+}
+
+RNG <- function(N=1) {
+  return(runif(N, min=-1, max=+1))
+}
+
+a <- seq(from=-1, to=1, by=0.01)
+b <- rep(0, times=length(a))
+for (i in c(1:length(a))) {
+  b[i] <- I_func(a[i])
+}
+
+plot(NA, ylim=c(0,1), xlim=c(-1,1))
+lines(a,b)
+
+c <- RNG(N=100)
+hist(c)
+
+```
+
+## Integration with Importance Sampling
+```{r}
+N <- 1000000
+x <- RNG(N)
+y <- rep(0, N)
+
+for (i in c(1:N)) {
+  y[i] <- I_func(x[i]) / g(x[i])
+}
+
+res <- mean(y)
+var <- var(y)
+
+print(res)
+print(sqrt(var)/sqrt(N))
+```
+Importance sampling converges successfully to the true value of \(\frac43\). And the standard error scales with \(1/\sqrt{N}\).
+
+## Integration with Metropolis-Hastings Markov Chain
+```{r}
+N <- 10000
+x <- RNG(N)
+p <- runif(N)
+
+y <- rep(0, N)
+y[i] <- I_func(x[1])
+
+for (i in c(2:N)) {
+  if (p[i] > I_func(x[i])/I_func(x[i-1])) {
+    x[i] <- x[i-1]
+    y[i] <- y[i-1]
+  } else {
+    y[i] <- I_func(x[i])
+  }
+}
+
+hist(x, freq = FALSE, ylim=c(0,1))
+lines(seq(-1,+1,by=0.05),(1-seq(-1,+1,by=0.05)**2)*3/4, col='red')
+lines(seq(-1,+1,by=0.05),(1-seq(-1,+1,by=0.05)**2), col='green')
+```
+
+Problem: With a Markov Chain we can sample from \(\sim (1-x^2) \) while not knowing the normalization constant for the probability distribution. In red the normalized distribution is shown, while in green our target function is plotted. The difference between those two is exactly our normalization constant.
+
+A priori we do not know the normalization constant and we have no elegant way of extracting the difference. One could fit the empirical distribution to the green curve to get an estimate, but it is not clear how this scales to higher dimensions and more complicated functions.
+
+```{r}
+hist(y, freq = FALSE)
+
+print(mean(y))
+print(sqrt(var(y)/N))
+
+```
