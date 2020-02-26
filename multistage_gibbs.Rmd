@@ -1,0 +1,30 @@
+---
+title: "Sampling with the multistage Gibbs Sampler"
+output: html_notebook
+---
+
+We have the state density \(\rho\) for our system of \(N\) particles at temperature \(T\) in a centered cuboid of volume \(\Lambda\). The position of the i-th particle is denoted as \(\mathbf{r}_i \in \mathbb{R}^d \) where the dimension \(d\) is set to 3 for now.
+
+\begin{equation}
+\rho(\{\mathbf{r}_k\}) = \exp\big[ -\frac1T \sum_{i<j} V_{ij} \big]\;, \qquad V_{ij} = \dfrac{q_i q_j}{|\mathbf{r}_i - \mathbf{r}_j|} + \dfrac{1}{|\mathbf{r}_i - \mathbf{r}_j|^8}
+\end{equation}
+
+In order to use the multistage Gibbs sampler for our PDF we need to know the conditional probabilities \( f_i(\mathbf{r}_i | \{\mathbf{r}_k\}_{k \neq i}) \).
+
+\begin{align}
+f_i(\mathbf{r}_i | \{\mathbf{r}_k\}_{k \neq i}) &= \dfrac{\rho(\mathbf{r}_i,\{\mathbf{r}_k\}_{k \neq i})}{\rho(\{\mathbf{r}_k\}_{k \neq i})} = \dfrac{\rho(\mathbf{r}_i,\{\mathbf{r}_k\}_{k \neq i})}{\int_\Lambda \text{d}\mathbf{x}_i\; \rho(\mathbf{x}_i,\{\mathbf{r}_k\}_{k \neq i})}\\
+&= \dfrac{\exp\big[ -\frac1T \sum_{i<j} V_{ij}(\mathbf{r}_i,\{\mathbf{r}_k\}_{k \neq i}) \big]) \big]}{\int_\Lambda \text{d}\mathbf{x}_i\; \exp\big[ -\frac1T \sum_{i<j} V_{ij}(\mathbf{x}_i,\{\mathbf{r}_k\}_{k \neq i}) \big]}
+\end{align}
+
+Note that the enumerator of the fraction depends on \(\mathbf{r}_i\) as the space coordinates for the i-th particle while the denominator depends on the integrand \(\mathbf{x}_i\) for the i-th particle position. All terms in the exponent that do not depend on the i-th particle in any way drop out.
+
+\begin{align}
+\Rightarrow f_i(\mathbf{r}_i | \{\mathbf{r}_k\}_{k \neq i}) &= \dfrac{\exp\big[ -\frac1T \sum_{j\neq i} V_{ij}(\mathbf{r}_i,\{\mathbf{r}_k\}_{k \neq i}) \big]) \big]}{\int_\Lambda \text{d}\mathbf{x}_i\; \exp\big[ -\frac1T \sum_{j \neq i} V_{ij}(\mathbf{x}_i,\{\mathbf{r}_k\}_{k \neq i}) \big]} \\
+&= \dfrac{\exp\big[ -\frac1T \sum_{j\neq i} \dfrac{q_i q_j}{|\mathbf{r}_i - \mathbf{r}_j|} + \dfrac{1}{|\mathbf{r}_i - \mathbf{r}_j|^8} \big]}{\int_\Lambda \text{d}\mathbf{x}_i\;\exp\big[ -\frac1T \sum_{j\neq i} \dfrac{q^x_i q_j}{|\mathbf{x}_i - \mathbf{r}_j|} + \dfrac{1}{|\mathbf{x}_i - \mathbf{r}_j|^8} \big]} \\
+&= \eta\; \exp\big[ -\frac1T \sum_{j\neq i} \dfrac{q_i q_j}{|\mathbf{r}_i - \mathbf{r}_j|} + \dfrac{1}{|\mathbf{r}_i - \mathbf{r}_j|^8} \big]
+\end{align}
+
+The integral in the denominator does not depend on \(\mathbf{r}_i\). We can hide the integral in a normalization constant \(\eta\). In principal we do not need to know the normalization constant to be able to draw from the distribution.
+
+
+Gibbs sampling is useful, when it is easy to draw from the conditional probabilities. In this case the conditional probability \(f_i(\mathbf{r}_i | \{\mathbf{r}_k\}_{k \neq i})\) is still too complicated. Unless we have made a mistake or there is a way to draw from the distribution, Gibbs sampling seems to be a dead end.
