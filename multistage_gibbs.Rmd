@@ -1,12 +1,12 @@
 ---
 title: "Sampling with the multistage Gibbs Sampler"
-output: html_notebook
+output: html_document
 ---
 
 We have the state density \(\rho\) for our system of \(N\) particles at temperature \(T\) in a centered cuboid of volume \(\Lambda\). The position of the i-th particle is denoted as \(\mathbf{r}_i \in \mathbb{R}^d \) where the dimension \(d\) is set to 3 for now.
 
 \begin{equation}
-\rho(\{\mathbf{r}_k\}) = \exp\big[ -\frac1T \sum_{i<j} V_{ij} \big]\;, \qquad V_{ij} = \dfrac{q_i q_j}{|\mathbf{r}_i - \mathbf{r}_j|} + \dfrac{1}{|\mathbf{r}_i - \mathbf{r}_j|^8}
+\rho(\{\mathbf{r}_k\}) = \frac1Z \; \exp\big[ -\frac1T \sum_{i<j} V_{ij} \big]\;, \qquad V_{ij} = \dfrac{q_i q_j}{|\mathbf{r}_i - \mathbf{r}_j|} + \dfrac{1}{|\mathbf{r}_i - \mathbf{r}_j|^8}
 \end{equation}
 
 In order to use the multistage Gibbs sampler for our PDF we need to know the conditional probabilities \( f_i(\mathbf{r}_i | \{\mathbf{r}_k\}_{k \neq i}) \).

@@ -1,0 +1,189 @@
+---
+title: 'Random Walk Metropolis Hastings'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+We have the state density \(\rho\) for our system of \(N\) particles at temperature \(T\) in a centered cuboid of volume \(\Lambda\). The position of the i-th particle is denoted as \(\mathbf{r}_i \in \mathbb{R}^d \) where \(d\) is the dimension.
+
+\begin{equation}
+\pi(\{\mathbf{r}_k\}) \sim \exp\big[ -\frac1T \sum_{i<j} V_{ij} \big]\;, \qquad V_{ij} = \dfrac{q_i q_j}{|\mathbf{r}_i - \mathbf{r}_j|} + \dfrac{1}{|\mathbf{r}_i - \mathbf{r}_j|^8}
+\end{equation}
+
+Algorithm: **Random Walk Metropolis-Hastings algorithm**
+
+1: Input: \(X_n\) 
+
+2: Generate \(Y_n \sim g(|y - x_n|) \) 
+
+3: Set \(X_{n+1}\) according to 
+\begin{equation}
+X_{n+1} =\left\{
+                \begin{array}{ll}
+                  y_n \;\text{ with probability } \min\left\{\dfrac{\pi(y_n)}{\pi(x_n)},\, 1\right\}\\
+                  x_n \;\text{ otherwise}
+                \end{array}
+              \right.
+\end{equation}
+
+
+We choose our instrumental distribution to be normal gaussian with mean \(\mu = 0\) and width \(\sigma\).
+\begin{equation}
+g(r) = \dfrac{1}{\sqrt{2\pi\sigma^2}} \exp\left( - \dfrac{r^2}{2\sigma^2} \right)
+\end{equation}
+
+The computation of \(\pi(y_n)/\pi(x_n)\) can be simplified with the knowledge that only the vector \(\mathbf{r}_i\) has changed. Only the sum components that depend on the i-th particle have to be considered. Here is \(\mathbf{x}_n = (\mathbf{r}_1, . . ., \mathbf{r}_i, ...,\mathbf{r}_N)\) and \(\mathbf{y}_n = (\mathbf{r}_1, . . ., \mathbf{r}^*_i, ...,\mathbf{r}_N)\) with \(\mathbf{r}^*_i = \mathbf{r}_i + \mathbf{G}\).
+\begin{align}
+\dfrac{\pi(y_n)}{\pi(x_n)} &= \dfrac{\exp\left[ -\frac1T \sum_{j\neq i} \dfrac{q_i q_j}{|\mathbf{r}^*_i - \mathbf{r}_j|} + \dfrac{1}{|\mathbf{r}^*_i - \mathbf{r}_j|^8} \right]}{\exp\left[ -\frac1T \sum_{j\neq i} \dfrac{q_i q_j}{|\mathbf{r}_i - \mathbf{r}_j|} + \dfrac{1}{|\mathbf{r}_i - \mathbf{r}_j|^8} \right]} \\
+&= \exp\left[ -\frac1T \sum_{j\neq i} \dfrac{q_i q_j}{|\mathbf{r}^*_i - \mathbf{r}_j|} - \dfrac{q_i q_j}{|\mathbf{r}_i - \mathbf{r}_j|} + \dfrac{1}{|\mathbf{r}^*_i - \mathbf{r}_j|^8} - \dfrac{1}{|\mathbf{r}_i - \mathbf{r}_j|^8} \right]
+\end{align}
+
+```{r functions}
+# Returns a candidate where the k-th particle was varied.
+g <- function(x, k, V, sigma = 1) {
+  if (length(x[1,])!=2) print("g is not defined for d!=2")
+  
+  r <- rnorm(1, mean=0, sd=sigma)
+  phi <- runif(1, min=0, max=1)
+  pi_const <- 3.14159265359
+  
+  x[k,] <- x[k,] + c(cos(phi*pi_const), sin(phi*pi_const)) * r
+  
+  a <- x[k,1]
+  b <- x[k,2]
+  
+  l <- V**(1/2)
+  a <- a + l/2
+  if (a < 0) a <- a + l
+  if (a > l) a <- a - l
+  a <- a - l/2
+  b <- b + l/2
+  if (b < 0) b <- b + l
+  if (b > l) b <- b - l
+  b <- b - l/2
+  x[k,1] <- a
+  x[k,2] <- b
+  
+  return(x)
+}
+
+# Returns the target distribution probability up to a normalization factor
+pi <- function(x, q, t) {
+  n <- length(q)     # Number of particles
+  d <- length(x[1,]) # Dimensions
+  
+  a <- 0 # Coulomb part
+  b <- 0 # Hard shell part
+  for (i in c(1:(n-1))) {
+    for (j in c((i+1):n)) {
+      a <- a + q[i] * q[j] / sqrt(sum((x[i,] - x[j,])**2))
+      b <- b + 1 / (sqrt(sum((x[i,] - x[j,])**2)))**8
+    }
+  }
+  return(exp(-1/t*(a + b)))
+}
+
+pi_quot <- function(y, x, q, k, t) {
+  n <- length(q)     # Number of particles
+  d <- length(x[1,]) # Dimensions
+  
+  a <- 0 # Coulomb part
+  b <- 0 # Hard shell part
+  for (j in c(1:n)[-k]) {
+    a <- a + q[k] * q[j] / sqrt(sum((y[k,] - y[j,])**2))
+    a <- a - q[k] * q[j] / sqrt(sum((x[k,] - x[j,])**2))
+    b <- b + 1 / sum((y[k,] - y[j,])**2)**4
+    b <- b - 1 / sum((x[k,] - x[j,])**2)**4
+  }
+  return(exp(-1/t*(a + b)))
+}
+```
+
+```{r random_walk}
+random_walk <- function(N, nPart, vol, t, X0, q) {
+  sigma <- 0.8    # Stepwidth
+  
+  # Create array for N phasespace points of nPart particles in d dimensions.
+  X <- array(data = NA, dim = c(N, nPart, d))
+  X[1,,] <- X0
+  
+  # Execute Markov Chain to make new samples:
+  accept_rate <- 0
+  for (n in c(2:N)) {
+    # Generate Y_n
+    k <- sample(c(1:nPart), 1)
+    y <- g(X[(n-1),,], k, vol, sigma)
+    # Set X_n
+    if (runif(1) < pi_quot(y, X[(n-1),,], q, k, t)) {
+      X[n,,] <- y
+      accept_rate <- accept_rate + 1
+    } else {
+      X[n,,] <- X[(n-1),,]
+    }
+  }
+  print(accept_rate/N*100.)
+  return(X)
+}
+```
+
+```{r visualization, include=FALSE, echo=FALSE}
+show_particles <- function(x, q, V){
+  l <- V**(1/2)
+  plot(NA, xlim=c(-l/2, l/2), ylim=c(-l/2,l/2), xlab='x', ylab='y')
+  
+  ipos <- which(q==+1)
+  posParticles <- x[ipos,]
+  points(x=posParticles[,1],y=posParticles[,2], col='red' )
+  
+  ineg <- which(q==-1)
+  negParticles <- x[ineg,]
+  points(x=negParticles[,1],y=negParticles[,2], col='blue')
+  
+  abline(h = -l/2)
+  abline(h = +l/2)
+  abline(v = -l/2)
+  abline(v = +l/2)
+}
+```
+
+```{r algorithm}
+d     <- 2    # Number of dimensions
+particleDensity <- 0.8
+vol   <- 1e3  # Volume of space
+N     <- 1e4  # Number of iterations
+t     <- 1    # Temperature of heat bath
+nPart <- ceiling(vol * particleDensity)  # Number of particles
+
+# Start configuration is chosen uniform randomly in the centered cuboid with volume vol.
+X0 <- array(data = runif(nPart*d, min=-vol**(1/d)/2, max=vol**(1/d)/2), dim = c(nPart, d))
+# q  <- sample(c(-1,+1), size=nPart, replace=TRUE)
+q <- c(rep(+1,ceiling(nPart/2)),rep(-1,floor(nPart/2)))
+cat("Number of {positive, negative} particles: {", length(which(q==+1)), ",", length(which(q==-1)),"}\n")
+
+# Show initial distribution
+show_particles(X0, q, vol)
+
+X <- random_walk(N, nPart, vol, t, X0, q)
+
+show_particles(X[N,,],q, vol)
+```
+
+```{r analysis_minimalDistance}
+hist_minDists <- rep(Inf, N)
+for (n in seq(from=1, to=N, by=ceiling(N/60))) {
+  for (i in c(1:(nPart-1))) {
+    for (j in c((i+1):nPart)) {
+      d <- sqrt(sum((X[n,i,] - X[n,j,])**2))
+      if (d < hist_minDists[n]) hist_minDists[n] <- d 
+    }
+  }
+}
+hist_minDists[which(hist_minDists==Inf)] <- NA
+```
+```{r}
+idx <- !is.na(hist_minDists)
+plot(x=c(1:N)[idx] ,y=hist_minDists[idx], type='b', log='y', ylim=c(0.01,2))
+```
