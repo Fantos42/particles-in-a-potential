@@ -71,7 +71,7 @@ g <- function(x, k, V, sigma = 1) {
 }
 
 # Returns the target distribution probability up to a normalization factor
-pi <- function(x, q, t) {
+getE <- function(x, q, t) {
   n <- length(q)     # Number of particles
   d <- length(x[1,]) # Dimensions
   
@@ -83,7 +83,7 @@ pi <- function(x, q, t) {
       b <- b + 1 / (sqrt(sum((x[i,] - x[j,])**2)))**8
     }
   }
-  return(exp(-1/t*(a + b)))
+  return((a + b))
 }
 
 pi_quot <- function(y, x, q, k, t) {
@@ -98,13 +98,15 @@ pi_quot <- function(y, x, q, k, t) {
     b <- b + 1 / sum((y[k,] - y[j,])**2)**4
     b <- b - 1 / sum((x[k,] - x[j,])**2)**4
   }
-  return(exp(-1/t*(a + b)))
+  return((a + b))
 }
 ```
 
 ```{r random_walk}
 random_walk <- function(N, nPart, vol, t, X0, q) {
-  sigma <- 0.8    # Stepwidth
+  sigma <- 5   # Stepwidth
+  DeltaE <- rep(0,N)
+  DeltaE[1] <- getE(X0, q, t)
   
   # Create array for N phasespace points of nPart particles in d dimensions.
   X <- array(data = NA, dim = c(N, nPart, d))
@@ -117,15 +119,17 @@ random_walk <- function(N, nPart, vol, t, X0, q) {
     k <- sample(c(1:nPart), 1)
     y <- g(X[(n-1),,], k, vol, sigma)
     # Set X_n
-    if (runif(1) < pi_quot(y, X[(n-1),,], q, k, t)) {
+    DeltaE[n] <- pi_quot(y, X[(n-1),,], q, k, t)
+    if (runif(1) < exp(-1/t*DeltaE[n])) {
       X[n,,] <- y
       accept_rate <- accept_rate + 1
     } else {
+      DeltaE[n] <- 0
       X[n,,] <- X[(n-1),,]
     }
   }
-  print(accept_rate/N*100.)
-  return(X)
+  # print(accept_rate/N*100.)
+  return(list(X=X, DeltaE=DeltaE))
 }
 ```
 
@@ -151,24 +155,63 @@ show_particles <- function(x, q, V){
 
 ```{r algorithm}
 d     <- 2    # Number of dimensions
-particleDensity <- 0.8
+particleDensity <- 0.5
 vol   <- 1e3  # Volume of space
-N     <- 1e4  # Number of iterations
-t     <- 1    # Temperature of heat bath
+N     <- 1e5  # Number of iterations
+t     <- 10    # Temperature of heat bath
 nPart <- ceiling(vol * particleDensity)  # Number of particles
 
 # Start configuration is chosen uniform randomly in the centered cuboid with volume vol.
-X0 <- array(data = runif(nPart*d, min=-vol**(1/d)/2, max=vol**(1/d)/2), dim = c(nPart, d))
+# X0 <- array(data = runif(nPart*d, min=-vol**(1/d)/2, max=vol**(1/d)/2), dim = c(nPart, d))
+# X0 <- array(data = sample.int(c(1:floor(vol))))
+X0 <- array(data = NA, dim = c(nPart, d))
+particle_ids <- c(1:nPart)
+nRow <- ceiling(sqrt(nPart))
+nCol <- ceiling(sqrt(nPart))
+for (i in c(1:nPart)) {
+  X0[i,1] <- (floor((particle_ids[i]-1) / nCol)) * vol**(1/2) / nRow - vol**(1/2) /2
+  X0[i,2] <- ((particle_ids[i]-1) %% nCol      ) * vol**(1/2) / nCol - vol**(1/2) /2
+}
 # q  <- sample(c(-1,+1), size=nPart, replace=TRUE)
-q <- c(rep(+1,ceiling(nPart/2)),rep(-1,floor(nPart/2)))
+q <- rep(1, nPart)
+for (j in c(2:nPart)) {
+  q[j] <- q[j-1]*-1
+}
+# q <- c(rep(+1,ceiling(nPart/2)),rep(-1,floor(nPart/2)))
 cat("Number of {positive, negative} particles: {", length(which(q==+1)), ",", length(which(q==-1)),"}\n")
 
 # Show initial distribution
 show_particles(X0, q, vol)
 
-X <- random_walk(N, nPart, vol, t, X0, q)
+Rlist <- random_walk(N, nPart, vol, t, X0, q)
+DeltaE <- Rlist$DeltaE
+X <- Rlist$X
+
 
 show_particles(X[N,,],q, vol)
+```
+```{r}
+E <- cumsum(DeltaE)
+plot(c(1:length(DeltaE)), cumsum(DeltaE))
+acf(E[c((N-1000):N)])
+
+hist(E[-c(1:5000)])
+```
+```{r}
+library(LaplacesDemon)
+Temp <- rep(0, 20)
+for (k in c(1:length(Temp))) {
+  Temp[k] <- 2/k
+}
+iats <- rep(0, length(Temp))
+for (i in c(1:length(Temp))) {
+  cat("Temp = ", Temp[i], " \n")
+  Reslist <- random_walk(1e4, nPart, 1e3, Temp[i], X0, q)
+  iats[i] <- IAT(Reslist$DeltaE[-c(1:5000)])
+}
+```
+```{r}
+plot(1/Temp, iats, ylab = "IAT")
 ```
 
 ```{r analysis_minimalDistance}
