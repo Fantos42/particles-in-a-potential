@@ -85,19 +85,141 @@ show_particles <- function(x, q, V){
 }
 ```
 
-```{Rcpp}
+```{Rcpp, echo=FALSE}
 #include <Rcpp.h>
 using namespace Rcpp;
 
 // [[Rcpp::export]]
 NumericVector timesTwo(NumericVector x) {
+  Rcout << "Successfully entered" << std::endl;
   return x * 2;
+}
+```
+```{r, echo=FALSE}
+# sourceCpp("timesTwo.cpp")
+timesTwo(c(1,2))
+print(timesTwo(c(1,2)))
+```
+
+```{Rcpp}
+#include <Rcpp.h>
+using namespace Rcpp;
+
+// [[Rcpp::export]]
+double getEnergy(NumericMatrix x, NumericVector q){
+  int n = q.size(); //number of particles
+  int d = x.ncol(); //dimensions
+  
+  double a, b, sum = 0;
+  for(int i = 0; i < n-1; i++){
+    for(int j = i+1; j < n; j++){
+      for(int k = 0; k < d; k++){
+        sum += (x(i,k) - x(j,k))*(x(i,k) - x(j,k));
+      }
+      a += q[i] * q[j] / sqrt(sum);
+      b += 1 / pow(sqrt(sum), 8); 
+      sum = 0;
+    }
+  }
+  return (a+b);
+}
+
+// [[Rcpp::export]]
+double stat_distr_quot(NumericMatrix y, NumericMatrix x, NumericVector q, int k){
+  int n = q.size(); //number of particles
+  int d = x.ncol(); //dimensions
+  
+  double a,b, sumx, sumy = 0;
+  for(int i = 0; i < n; i++){
+    if(i == k) continue;
+    for(int j = 0; j < d; j++){
+      sumx += (x(k,j) - x(i,j))*(x(k,j) - x(i,j));
+      sumy += (y(k,j) - y(i,j))*(y(k,j) - y(i,j));
+    }
+    a += q[k] * q[i] / sqrt(sumy) - q[k] * q[i] / sqrt(sumx);
+    b += 1/ pow(sumy, 4) - 1/ pow(sumx, 4);
+    sumx = 0;
+    sumy = 0;
+  }
+  return (a+b);
+}
+
+// [[Rcpp::export]]
+NumericMatrix getInstr_distr(NumericMatrix x, int k, double v, double sigma = 1){
+  if(x.ncol() != 2) Rcout << "g is not defined for d!=2" << std::endl;
+  
+  double l = sqrt(v);
+  NumericVector r = rnorm(1, 0, sigma);
+  NumericVector phi = runif(1, 0, 1);
+  
+  //Generate distance r and direction phi. Get new coord with spherical trafo
+  NumericVector c = NumericVector::create(cos(phi[0]*M_PI)*r[0], sin(phi[0]*M_PI)*r[0]);
+  
+  for(int i=0; i < x.ncol(); i++){
+    x(k, i) +=  c[i]; 
+    // Periodic boundary wrap
+    if(x(k, i) < -l/2) x(k,i) += l;
+    else if (x(k, i) > l/2) x(k,i) -= l;  
+  }
+  return x;
 }
 ```
 
 ```{r}
-print(timesTwo(c(1,2)))
+#--------------------------------------------------------------------------------------------------------------------
+#Test c++ Functions:
+#--------------------------------------------------------------------------------------------------------------------
+d     <- 2    # Number of dimensions
+particleDensity <- 0.1
+vol   <- 1e3  # Volume of space
+nIt   <- 1e3  # Number of iterations
+t     <- 10    # Temperature of heat bath
+nPart <- ceiling(vol * particleDensity)  # Number of particles
+
+# Start configuration is chosen uniform randomly in the centered cuboid with volume vol.
+X0 <- array(data = NA, dim = c(nPart, d))
+particle_ids <- c(1:nPart)
+nRow <- ceiling(sqrt(nPart))
+nCol <- ceiling(sqrt(nPart))
+for (i in c(1:nPart)) {
+  X0[i,1] <- (floor((particle_ids[i]-1) / nCol)) * vol**(1/2) / nRow - vol**(1/2) /2
+  X0[i,2] <- ((particle_ids[i]-1) %% nCol      ) * vol**(1/2) / nCol - vol**(1/2) /2
+}
+q <- rep(1, nPart)
+for (j in c(2:nPart)) {
+  q[j] <- q[j-1]*-1
+}
+
+pi_quot <- function(y, x, q, k, t) {
+  n <- length(q)     # Number of particles
+  d <- length(x[1,]) # Dimensions
+
+  a <- 0 # Coulomb part
+  b <- 0 # Hard shell part
+  for (j in c(1:n)[-k]) {
+    a <- a + q[k] * q[j] / sqrt(sum((y[k,] - y[j,])**2))
+    a <- a - q[k] * q[j] / sqrt(sum((x[k,] - x[j,])**2))
+    b <- b + 1 / sum((y[k,] - y[j,])**2)**4
+    b <- b - 1 / sum((x[k,] - x[j,])**2)**4
+  }
+  return((a + b))
+}
+
+
+k <- sample(c(1:nPart), 1)
+print(k)
+
+piQuot <- pi_quot(y, X0, q, k, t)
+neupiquot <- stat_distr_quot(y, X0, q, k)
+
+print(piQuot)
+print(neupiquot)
+
+#--------------------------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------------------------
+
 ```
+
 
 ```{r functions}
 # Returns a candidate where the k-th particle was varied.
