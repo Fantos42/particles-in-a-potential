@@ -15,11 +15,11 @@ We have the state density \(\rho\) for our system of \(N\) particles at temperat
 
 Algorithm: **Random Walk Metropolis-Hastings algorithm**
 
-1: Input: \(X_n\) 
+1: Input: \(X_n\)
 
-2: Generate \(Y_n \sim g(|y - x_n|) \) 
+2: Generate \(Y_n \sim g(|y - x_n|) \)
 
-3: Set \(X_{n+1}\) according to 
+3: Set \(X_{n+1}\) according to
 \begin{equation}
 X_{n+1} =\left\{
                 \begin{array}{ll}
@@ -45,16 +45,16 @@ The computation of \(\pi(y_n)/\pi(x_n)\) can be simplified with the knowledge th
 # Returns a candidate where the k-th particle was varied.
 g <- function(x, k, V, sigma = 1) {
   if (length(x[1,])!=2) print("g is not defined for d!=2")
-  
+
   r <- rnorm(1, mean=0, sd=sigma)
   phi <- runif(1, min=0, max=1)
   pi_const <- 3.14159265359
-  
+
   x[k,] <- x[k,] + c(cos(phi*pi_const), sin(phi*pi_const)) * r
-  
+
   a <- x[k,1]
   b <- x[k,2]
-  
+
   l <- V**(1/2)
   a <- a + l/2
   if (a < 0) a <- a + l
@@ -66,7 +66,7 @@ g <- function(x, k, V, sigma = 1) {
   b <- b - l/2
   x[k,1] <- a
   x[k,2] <- b
-  
+
   return(x)
 }
 
@@ -74,7 +74,7 @@ g <- function(x, k, V, sigma = 1) {
 getE <- function(x, q, t) {
   n <- length(q)     # Number of particles
   d <- length(x[1,]) # Dimensions
-  
+
   a <- 0 # Coulomb part
   b <- 0 # Hard shell part
   for (i in c(1:(n-1))) {
@@ -89,7 +89,7 @@ getE <- function(x, q, t) {
 pi_quot <- function(y, x, q, k, t) {
   n <- length(q)     # Number of particles
   d <- length(x[1,]) # Dimensions
-  
+
   a <- 0 # Coulomb part
   b <- 0 # Hard shell part
   for (j in c(1:n)[-k]) {
@@ -107,11 +107,11 @@ random_walk <- function(N, nPart, vol, t, X0, q) {
   sigma <- 5   # Stepwidth
   DeltaE <- rep(0,N)
   DeltaE[1] <- getE(X0, q, t)
-  
+
   # Create array for N phasespace points of nPart particles in d dimensions.
   X <- array(data = NA, dim = c(N, nPart, d))
   X[1,,] <- X0
-  
+
   # Execute Markov Chain to make new samples:
   accept_rate <- 0
   for (n in c(2:N)) {
@@ -136,16 +136,39 @@ random_walk <- function(N, nPart, vol, t, X0, q) {
 ```{r visualization, include=FALSE, echo=FALSE}
 show_particles <- function(x, q, V){
   l <- V**(1/2)
-  plot(NA, xlim=c(-l/2, l/2), ylim=c(-l/2,l/2), xlab='x', ylab='y')
-  
+  # dev.new(width = 550, height = 550, unit = "px")
+  par(pty="s")
+  plot(NA, xlim=c(-l/2, l/2), ylim=c(-l/2,l/2), xlab='x', ylab='y', asp=1)
+
   ipos <- which(q==+1)
   posParticles <- x[ipos,]
-  points(x=posParticles[,1],y=posParticles[,2], col='red' )
-  
+  # points(x=posParticles[,1],y=posParticles[,2], col='red' )
+  arrows(x0=posParticles[,1]-0.5,
+         y0=posParticles[,2],
+         x1=posParticles[,1]+0.5,
+         y1=posParticles[,2],
+         length=0.01, angle=90, code=0, col='red')
+  arrows(x0=posParticles[,1],
+         y0=posParticles[,2]-0.5,
+         x1=posParticles[,1],
+         y1=posParticles[,2]+0.5,
+         length=0.01, angle=90, code=0, col='red')
+
   ineg <- which(q==-1)
   negParticles <- x[ineg,]
-  points(x=negParticles[,1],y=negParticles[,2], col='blue')
-  
+  # points(x=negParticles[,1],y=negParticles[,2], col='blue')
+  arrows(x0=negParticles[,1]-0.5,
+         y0=negParticles[,2],
+         x1=negParticles[,1]+0.5,
+         y1=negParticles[,2],
+         length=0.01, angle=90, code=0, col='blue')
+  arrows(x0=negParticles[,1],
+         y0=negParticles[,2]-0.5,
+         x1=negParticles[,1],
+         y1=negParticles[,2]+0.5,
+         length=0.01, angle=90, code=0, col='blue')
+
+
   abline(h = -l/2)
   abline(h = +l/2)
   abline(v = -l/2)
@@ -220,7 +243,7 @@ for (n in seq(from=1, to=N, by=ceiling(N/60))) {
   for (i in c(1:(nPart-1))) {
     for (j in c((i+1):nPart)) {
       d <- sqrt(sum((X[n,i,] - X[n,j,])**2))
-      if (d < hist_minDists[n]) hist_minDists[n] <- d 
+      if (d < hist_minDists[n]) hist_minDists[n] <- d
     }
   }
 }
