@@ -42,7 +42,7 @@ The computation of \(\pi(y_n)/\pi(x_n)\) can be simplified with the knowledge th
 &= \exp\left[ -\frac1T \sum_{j\neq i} \dfrac{q_i q_j}{|\mathbf{r}^*_i - \mathbf{r}_j|} - \dfrac{q_i q_j}{|\mathbf{r}_i - \mathbf{r}_j|} + \dfrac{1}{|\mathbf{r}^*_i - \mathbf{r}_j|^8} - \dfrac{1}{|\mathbf{r}_i - \mathbf{r}_j|^8} \right]
 \end{align}
 
-```{r visualization, include=FALSE, echo=FALSE}
+```{r visualization}
 show_particles <- function(x, q, V){
   l <- V**(1/2)
   # dev.new(width = 550, height = 550, unit = "px")
@@ -85,154 +85,7 @@ show_particles <- function(x, q, V){
 }
 ```
 
-```{Rcpp, echo=FALSE}
-#include <Rcpp.h>
-using namespace Rcpp;
-
-// [[Rcpp::export]]
-NumericVector timesTwo(NumericVector x) {
-  Rcout << "Successfully entered" << std::endl;
-  return x * 2;
-}
-```
-```{r, echo=FALSE}
-# sourceCpp("timesTwo.cpp")
-timesTwo(c(1,2))
-print(timesTwo(c(1,2)))
-```
-
-```{Rcpp}
-#include <Rcpp.h>
-using namespace Rcpp;
-
-// [[Rcpp::export]]
-double getEnergy(NumericMatrix x, NumericVector q){
-  int n = q.size(); //number of particles
-  int d = x.ncol(); //dimensions
-  
-  double a, b, sum = 0;
-  for(int i = 0; i < n-1; i++){
-    for(int j = i+1; j < n; j++){
-      for(int k = 0; k < d; k++){
-        sum += (x(i,k) - x(j,k))*(x(i,k) - x(j,k));
-      }
-      a += q[i] * q[j] / sqrt(sum);
-      b += 1 / pow(sqrt(sum), 8); 
-      sum = 0;
-    }
-  }
-  return (a+b);
-}
-
-// [[Rcpp::export]]
-double stat_distr_quot(NumericMatrix y, NumericMatrix x, NumericVector q, int k){
-  int n = q.size(); //number of particles
-  int d = x.ncol(); //dimensions
-  
-  double a,b, sumx, sumy = 0;
-  for(int i = 0; i < n; i++){
-    if(i == (k-1)) continue;
-    for(int j = 0; j < d; j++){
-      sumx += (x((k-1),j) - x(i,j))*(x((k-1),j) - x(i,j));
-      sumy += (y((k-1),j) - y(i,j))*(y((k-1),j) - y(i,j));
-    }
-    a += q[(k-1)] * q[i] / sqrt(sumy) - q[(k-1)] * q[i] / sqrt(sumx);
-    b += 1/ pow(sumy, 4) - 1/ pow(sumx, 4);
-    sumx = 0;
-    sumy = 0;
-  }
-  return (a+b);
-}
-
-// [[Rcpp::export]]
-NumericMatrix getInstr_distr(NumericMatrix x, int k, double v, double sigma = 1){
-  if(x.ncol() != 2) Rcout << "g is not defined for d!=2" << std::endl;
-  
-  double l = sqrt(v);
-  NumericVector r = rnorm(1, 0, sigma);
-  NumericVector phi = runif(1, 0, 1);
-  
-  //Generate distance r and direction phi. Get new coord with spherical trafo
-  NumericVector c = NumericVector::create(cos(phi[0]*M_PI)*r[0], sin(phi[0]*M_PI)*r[0]);
-  
-  for(int i=0; i < x.ncol(); i++){
-    x(k, i) +=  c[i]; 
-    // Periodic boundary wrap
-    if(x(k, i) < -l/2) x(k,i) += l;
-    else if (x(k, i) > l/2) x(k,i) -= l;  
-  }
-  return x;
-}
-```
-
-```{r}
-#--------------------------------------------------------------------------------------------------------------------
-#Test c++ Functions:
-#--------------------------------------------------------------------------------------------------------------------
-d     <- 2    # Number of dimensions
-particleDensity <- 0.1
-vol   <- 1e2  # Volume of space
-nIt   <- 1e3  # Number of iterations
-t     <- 10    # Temperature of heat bath
-nPart <- ceiling(vol * particleDensity)  # Number of particles
-
-# Start configuration is chosen uniform randomly in the centered cuboid with volume vol.
-X0 <- array(data = NA, dim = c(nPart, d))
-particle_ids <- c(1:nPart)
-nRow <- ceiling(sqrt(nPart))
-nCol <- ceiling(sqrt(nPart))
-for (i in c(1:nPart)) {
-  X0[i,1] <- (floor((particle_ids[i]-1) / nCol)) * vol**(1/2) / nRow - vol**(1/2) /2
-  X0[i,2] <- ((particle_ids[i]-1) %% nCol      ) * vol**(1/2) / nCol - vol**(1/2) /2
-}
-q <- rep(1, nPart)
-for (j in c(2:nPart)) {
-  q[j] <- q[j-1]*-1
-}
-
-pi_quot <- function(y, x, q, k, t) {
-  n <- length(q)     # Number of particles
-  d <- length(x[1,]) # Dimensions
-
-  a <- 0 # Coulomb part
-  b <- 0 # Hard shell part
-  for (j in c(1:n)[-k]) {
-    a <- a + q[k] * q[j] / sqrt(sum((y[k,] - y[j,])**2))
-    a <- a - q[k] * q[j] / sqrt(sum((x[k,] - x[j,])**2))
-    b <- b + 1 / sum((y[k,] - y[j,])**2)**4
-    b <- b - 1 / sum((x[k,] - x[j,])**2)**4
-  }
-  return((a + b))
-}
-
-start_time <- Sys.time()
-Rlist <- random_walk(nIt, nPart, vol, t, X0, q)
-end_time <- Sys.time()
-
-print(end_time - start_time)
-
-# start_time <- Sys.time()
-Rlist1 <- random_walk_with_cpp(nIt, nPart, vol, t, X0, q)
-# end_time <- Sys.time()
-
-# print(end_time - start_time)
-# k <- sample(c(1:nPart), 1)
-# print(k)
-# y <- g(X0, k, vol)
-# 
-# piQuot <- pi_quot(y, X0, q, k, t)
-# neupiquot <- stat_distr_quot(y, X0, q, k)
-# 
-# print(piQuot)
-# print(neupiquot)
-
-#--------------------------------------------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------------------------------------------
-
-```
-
-
-```{r functions}
+```{r R_functions}
 # Returns a candidate where the k-th particle was varied.
 g <- function(x, k, V, sigma = 1) {
   if (length(x[1,])!=2) print("g is not defined for d!=2")
@@ -286,7 +139,7 @@ pi_quot <- function(y, x, q, k, t) {
 }
 ```
 
-```{r function_random_walk}
+```{r random_walk_function}
 random_walk <- function(nIt, nPart, vol, t, X0, q) {
   sigma <- 2   # Stepwidth
   DeltaE <- rep(0,nIt)
@@ -317,56 +170,25 @@ random_walk <- function(nIt, nPart, vol, t, X0, q) {
 }
 ```
 
-```{r function_random_walk}
-random_walk_with_cpp <- function(nIt, nPart, vol, t, X0, q) {
-  sigma <- 2   # Stepwidth
-  DeltaE <- rep(0,nIt)
-  DeltaE[1] <- getE(X0, q, t)
-
-  # Create array for N phasespace points of nPart particles in d dimensions.
-  X <- array(data = NA, dim = c(nIt, nPart, d))
-  X[1,,] <- X0
-
-  # Execute Markov Chain to make new samples:
-  accept_rate <- 0
-  for (n in c(2:nIt)) {
-    # Generate Y_n
-    k <- sample(c(1:nPart), 1)
-    y <- getInstr_distr(X[(n-1),,], k, vol, sigma)
-    # Set X_n
-    DeltaE[n] <- stat_distr_quot(y, X[(n-1),,], q, k)
-    if (runif(1) < exp(-1/t*DeltaE[n])) {
-      X[n,,] <- y
-      accept_rate <- accept_rate + 1
-    } else {
-      DeltaE[n] <- 0
-      X[n,,] <- X[(n-1),,]
-    }
-  }
-  # print(accept_rate/nIt*100.)
-  return(list(X=X, DeltaE=DeltaE))
-}
-```
-
-```{r algorithm}
+```{r steering}
 d     <- 2    # Number of dimensions
-particleDensity <- 0.1
+particleDensity <- 0.5
 vol   <- 1e3  # Volume of space
-nIt   <- 1e3  # Number of iterations
+nIt   <- 1e4  # Number of iterations
 t     <- 10    # Temperature of heat bath
 nPart <- ceiling(vol * particleDensity)  # Number of particles
 
 # Start configuration is chosen uniform randomly in the centered cuboid with volume vol.
-# X0 <- array(data = runif(nPart*d, min=-vol**(1/d)/2, max=vol**(1/d)/2), dim = c(nPart, d))
-# X0 <- array(data = sample.int(c(1:floor(vol))))
-X0 <- array(data = NA, dim = c(nPart, d))
-particle_ids <- c(1:nPart)
-nRow <- ceiling(sqrt(nPart))
-nCol <- ceiling(sqrt(nPart))
-for (i in c(1:nPart)) {
-  X0[i,1] <- (floor((particle_ids[i]-1) / nCol)) * vol**(1/2) / nRow - vol**(1/2) /2
-  X0[i,2] <- ((particle_ids[i]-1) %% nCol      ) * vol**(1/2) / nCol - vol**(1/2) /2
-}
+X0 <- array(data = runif(nPart*d, min=-vol**(1/d)/2, max=vol**(1/d)/2), dim = c(nPart, d))
+
+# X0 <- array(data = NA, dim = c(nPart, d))
+# particle_ids <- c(1:nPart)
+# nRow <- ceiling(sqrt(nPart))
+# nCol <- ceiling(sqrt(nPart))
+# for (i in c(1:nPart)) {
+#   X0[i,1] <- (floor((particle_ids[i]-1) / nCol)) * vol**(1/2) / nRow - vol**(1/2) /2
+#   X0[i,2] <- ((particle_ids[i]-1) %% nCol      ) * vol**(1/2) / nCol - vol**(1/2) /2
+# }
 # q  <- sample(c(-1,+1), size=nPart, replace=TRUE)
 q <- rep(1, nPart)
 for (j in c(2:nPart)) {
@@ -384,14 +206,16 @@ X <- Rlist$X
 
 show_particles(X[nIt,,],q, vol)
 ```
-```{r}
+
+<!-- EVALUATION -->
+```{r eval_energy}
 E <- cumsum(DeltaE)
-plot(c(1:length(DeltaE)), cumsum(DeltaE))
+plot(c(1:length(DeltaE)), cumsum(DeltaE), log='y')
 acf(E[c((nIt-1000):nIt)])
 
 hist(E[-c(1:5000)])
 ```
-```{r}
+```{r eval_iac}
 library(LaplacesDemon)
 Temp <- rep(0, 20)
 for (k in c(1:length(Temp))) {
@@ -400,15 +224,15 @@ for (k in c(1:length(Temp))) {
 iats <- rep(0, length(Temp))
 for (i in c(1:length(Temp))) {
   cat("Temp = ", Temp[i], " \n")
-  Reslist <- random_walk(1e4, nPart, 1e3, Temp[i], X0, q)
+  Reslist <- random_walk(nIt, nPart, vol, Temp[i], X0, q)
   iats[i] <- IAT(Reslist$DeltaE[-c(1:5000)])
 }
 ```
-```{r}
+```{r eval_iac_plot}
 plot(1/Temp, iats, ylab = "IAT")
 ```
 
-```{r analysis_minimalDistance}
+```{r eval_minimalDistance}
 hist_minDists <- rep(Inf, nIt)
 for (n in seq(from=1, to=nIt, by=ceiling(nIt/60))) {
   for (i in c(1:(nPart-1))) {
@@ -420,7 +244,7 @@ for (n in seq(from=1, to=nIt, by=ceiling(nIt/60))) {
 }
 hist_minDists[which(hist_minDists==Inf)] <- NA
 ```
-```{r plot_minimalDistance}
+```{r eval_minimalDistance_plot}
 idx <- !is.na(hist_minDists)
 plot(x=c(1:nIt)[idx] ,y=hist_minDists[idx], type='b', log='y', ylim=c(0.01,2))
 ```
