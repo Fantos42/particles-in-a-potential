@@ -1,0 +1,240 @@
+---
+title: 'MCMC for particles in a potential'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(Rcpp)
+library(LaplacesDemon)
+```
+
+```{r visualization}
+show_particles <- function(x, q, V){
+  l <- V**(1/2)
+  # dev.new(width = 550, height = 550, unit = "px")
+  par(pty="s")
+  plot(NA, xlim=c(-l/2, l/2), ylim=c(-l/2,l/2), xlab='x', ylab='y', asp=1)
+
+  ipos <- which(q==+1)
+  posParticles <- x[ipos,]
+  # points(x=posParticles[,1],y=posParticles[,2], col='red' )
+  arrows(x0=posParticles[,1]-0.5,
+         y0=posParticles[,2],
+         x1=posParticles[,1]+0.5,
+         y1=posParticles[,2],
+         length=0.01, angle=90, code=0, col='red')
+  arrows(x0=posParticles[,1],
+         y0=posParticles[,2]-0.5,
+         x1=posParticles[,1],
+         y1=posParticles[,2]+0.5,
+         length=0.01, angle=90, code=0, col='red')
+
+  ineg <- which(q==-1)
+  negParticles <- x[ineg,]
+  # points(x=negParticles[,1],y=negParticles[,2], col='blue')
+  arrows(x0=negParticles[,1]-0.5,
+         y0=negParticles[,2],
+         x1=negParticles[,1]+0.5,
+         y1=negParticles[,2],
+         length=0.01, angle=90, code=0, col='blue')
+  arrows(x0=negParticles[,1],
+         y0=negParticles[,2]-0.5,
+         x1=negParticles[,1],
+         y1=negParticles[,2]+0.5,
+         length=0.01, angle=90, code=0, col='blue')
+
+
+  abline(h = -l/2)
+  abline(h = +l/2)
+  abline(v = -l/2)
+  abline(v = +l/2)
+}
+```
+
+```{Rcpp Rcpp_functions}
+// [[Rcpp::plugins("cpp11")]]
+#include <Rcpp.h>
+#include <vector>
+using namespace Rcpp;
+
+// [[Rcpp::export]]
+double E_CPP(NumericMatrix x, NumericVector q){
+  int n = q.size(); //number of particles
+  int d = x.ncol(); //dimensions
+  
+  double a, b, sum = 0;
+  for(int i = 0; i < n-1; i++){
+    for(int j = i+1; j < n; j++){
+      sum = 0;
+      for(int k = 0; k < d; k++){
+        sum += (x(i,k) - x(j,k))*(x(i,k) - x(j,k));
+      }
+      a += q[i] * q[j] / sqrt(sum);
+      b += 1 / pow(sum, 4); 
+    }
+  }
+  return (a+b);
+}
+
+// [[Rcpp::export]]
+Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, NumericMatrix X0, NumericVector q){
+  double sigma = 0.5;
+  double alpha = 0.05;
+  const double l = sqrt(vol);
+  
+  NumericVector dE(nIt, 0.0);
+  dE[0] = E_CPP(X0, q);
+  
+  int d = X0(1,Rcpp::_).size();
+  std::vector<std::vector<double>> X(nIt,std::vector<double>(d,0));
+  for (int i = 0; i < nPart; i++) {
+    for (int j = 0; j < d; j++) {
+      X[i][j] = X0(i,j);
+    }
+  }
+  
+  double accept_rate = 0;
+  int k  = -1;
+  int kk = -1;
+  for (int n = 1; n < nIt; n++) {
+    k = std::floor(R::runif(0,nPart));
+    // ---------------------------------------------------------------------------
+    for(int j = 0; j < nPart; j++){
+      if(j == k) continue;
+      
+      double sum = 0;
+      for(int l = 0; l < d; l++){
+        sum += (X[k][l] - X[j][l])*(X[k][l] - X[j][l]);
+      }
+      
+      dE[n] -= q[k] * q[j] / sqrt(sum) + 1/ pow(sum, 4);
+    }
+    // ---------------------------------------------------------------------------
+    // Make new candidates (Save old coordinates in case of rejection)
+    const double old_x1 = X[k][0];
+    const double old_x2 = X[k][1];
+    
+    if (R::runif(0,1) < 0) {
+      kk = std::floor(R::runif(0,nPart));
+    } else {
+      NumericVector r   = rnorm(1, 0, sigma);
+      NumericVector phi = runif(1, 0, 1);
+      //Generate distance r and direction phi. Get new coord with spherical trafo
+      NumericVector c = NumericVector::create(cos(phi[0]*M_PI)*r[0], sin(phi[0]*M_PI)*r[0]);
+      for(int i=0; i < d; i++){
+        X[k][i] +=  c(i); 
+        // Periodic boundary wrap
+        if      (X[k][i] < -l/2) X[k][i] += l;
+        else if (X[k][i] > +l/2) X[k][i] -= l;  
+      }
+    }
+    // ---------------------------------------------------------------------------
+    for(int j = 0; j < nPart; j++){
+      if(j == k) continue;
+      
+      double sum = 0;
+      for(int l = 0; l < d; l++){
+        sum += (X[k][l] - X[j][l])*(X[k][l] - X[j][l]);
+      }
+      
+      dE[n] += q[k] * q[j] / sqrt(sum) + 1/ pow(sum, 4);
+    }
+    // ---------------------------------------------------------------------------
+    if (R::runif(0,1) < std::exp(-1/t * dE[n])) {
+      //X = Y;
+      accept_rate += 1;
+    } else {
+      dE[n] = 0;
+      X[k][0] = old_x1;
+      X[k][1] = old_x2;
+    }
+  }
+  Rcout << "Acceptance: " << accept_rate/nIt*100. << "%" << std::endl;
+  
+  
+  for (int i = 0; i < nPart; i++) {
+    for (int j = 0; j < d; j++) {
+      X0(i,j) = X[i][j];
+    }
+  }
+  
+  Rcpp::List rList = Rcpp::List::create(Named("dE")=dE, Named("X")=X0);
+  return rList;
+}
+```
+
+```{r}
+# --------------------------------------------------------------------------------
+# HYPERPARAMETERS:
+d               <- 2    # Number of dimensions
+particleDensity <- 0.6
+vol             <- 1e3  # Volume of space
+nIt             <- 6e5  # Number of iterations
+beta            <- 10000
+# These below are implied
+t     <- 1/beta # Temperature of heat bath
+nPart <- ceiling(vol * particleDensity)  # Number of particles
+# --------------------------------------------------------------------------------
+# Start configuration:
+# --------------- ---------------------------------------
+# --------------- Random positions
+X0 <- array(data = runif(nPart*d, min=-vol**(1/d)/2, max=vol**(1/d)/2), dim = c(nPart, d))
+# --------------- Positioned on a regular lattice
+# X0 <- array(data = NA, dim = c(nPart, d))
+# nRow <- ceiling(sqrt(nPart))
+# nCol <- round  (sqrt(nPart))
+# for (i in c(1:nPart)) {
+#   X0[i,1] <- (floor((i-1) / nCol)) * vol**(1/2) / nRow - vol**(1/2) * (1/2 - 1/2/nCol)
+#   X0[i,2] <- ((i-1) %% nCol      ) * vol**(1/2) / nCol - vol**(1/2) * (1/2 - 1/2/nCol)
+# }
+
+# --------------- ---------------------------------------
+# --------------- Random charges
+#q  <- sample(c(-1,+1), size=nPart, replace=TRUE)
+# --------------- Alternating charges
+q <- rep(1, nPart)
+for (j in c(2:nPart)) {
+  q[j] <- q[j-1]*-1
+}
+# --------------- First positive, then negative charges
+# q <- c(rep(+1,ceiling(nPart/2)),rep(-1,floor(nPart/2)))
+# --------------- ---------------------------------------
+show_particles(X0,q,vol)
+cat("Number of {positive, negative} particles: {", length(which(q==+1)), ",", length(which(q==-1)),"}\n")
+# --------------------------------------------------------------------------------
+cat("\nRun MCMC particles in a potential . .\n")
+start_time <- Sys.time()
+MCMC_res <- MCMC_CPP(nIt, nPart, vol, t, X0, q)
+cat("Runtime: ",as.double(t2<- Sys.time() - start_time, units='secs'),"\n")
+show_particles(MCMC_res$X, q, vol)
+# --------------------------------------------------------------------------------
+```
+
+```{r evaluation}
+cat("Energy (indirect):", b <- sum(MCMC_res$dE), "\n")
+E <- cumsum(MCMC_res$dE)
+plot(x=c(1:nIt),y=E[c(1:nIt)]+abs(min(E[c(1:nIt)]))+1,type='l',log='xy')
+
+acf(E[c(2e4:nIt)], lag.max = 20000)
+IAT(E[c(2e4:nIt)])
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
