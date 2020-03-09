@@ -56,7 +56,7 @@ show_particles <- function(x, q, V){
 
 ```{r R_functions}
 # Returns a candidate where the k-th particle was varied.
-g <- function(x, k, V, sigma = 1) {
+g_R <- function(x, k, V, sigma = 1) {
   if (length(x[1,])!=2) print("g is not defined for d!=2")
   
   l <- V**(1/2)
@@ -77,7 +77,7 @@ g <- function(x, k, V, sigma = 1) {
 }
 
 # Returns the target distribution probability up to a normalization factor
-getE <- function(x, q, t) {
+E_R <- function(x, q) {
   n <- length(q)     # Number of particles
   d <- length(x[1,]) # Dimensions
 
@@ -92,7 +92,7 @@ getE <- function(x, q, t) {
   return((a + b))
 }
 
-pi_quot <- function(y, x, q, k, t) {
+E_diff_R <- function(y, x, q, k) {
   n <- length(q)     # Number of particles
   d <- length(x[1,]) # Dimensions
 
@@ -109,11 +109,57 @@ pi_quot <- function(y, x, q, k, t) {
 ```
 
 ```{Rcpp Rcpp_functions}
+// [[Rcpp::plugins("cpp11")]]
 #include <Rcpp.h>
+#include <vector>
+#include <ctime>
 using namespace Rcpp;
 
 // [[Rcpp::export]]
-double getEnergy(NumericMatrix x, NumericVector q){
+NumericMatrix g_CPP(NumericMatrix X, int k, double v, double sigma = 1){
+  if(X.ncol() != 2) Rcout << "g is not defined for d!=2" << std::endl;
+  k = k - 1; // Shift index from R to CPP convention
+  
+  NumericMatrix x = X;
+  double l = sqrt(v);
+  NumericVector r   = rnorm(1, 0, sigma);
+  NumericVector phi = runif(1, 0, 1);
+  
+  //Generate distance r and direction phi. Get new coord with spherical trafo
+  NumericVector c = NumericVector::create(cos(phi[0]*M_PI)*r[0], sin(phi[0]*M_PI)*r[0]);
+  
+  for(int i=0; i < x.ncol(); i++){
+    x(k, i) +=  c[i]; 
+    // Periodic boundary wrap
+    if      (x(k, i) < -l/2) x(k,i) += l;
+    else if (x(k, i) > +l/2) x(k,i) -= l;  
+  }
+  return x;
+}
+
+std::vector<std::vector<double>> g_CPP(std::vector<std::vector<double>> x, int k, double v, double sigma = 1){
+  int dim = x[0].size();
+  if(dim != 2) Rcout << "g is not defined for d!=2" << std::endl;
+  k = k - 1; // Shift index from R to CPP convention
+  
+  double l = sqrt(v);
+  NumericVector r   = rnorm(1, 0, sigma);
+  NumericVector phi = runif(1, 0, 1);
+  
+  //Generate distance r and direction phi. Get new coord with spherical trafo
+  NumericVector c = NumericVector::create(cos(phi[0]*M_PI)*r[0], sin(phi[0]*M_PI)*r[0]);
+  
+  for(int d=0; d < dim; d++){
+    x[k][d] +=  c(d); 
+    // Periodic boundary wrap
+    if      (x[k][d] < -l/2) x[k][d] += l;
+    else if (x[k][d] > +l/2) x[k][d] -= l;  
+  }
+  return x;
+}
+
+// [[Rcpp::export]]
+double E_CPP(NumericMatrix x, NumericVector q){
   int n = q.size(); //number of particles
   int d = x.ncol(); //dimensions
   
@@ -132,7 +178,7 @@ double getEnergy(NumericMatrix x, NumericVector q){
 }
 
 // [[Rcpp::export]]
-double stat_distr_quot(NumericMatrix y, NumericMatrix x, NumericVector q, int k){
+double E_diff_CPP(NumericMatrix y, NumericMatrix x, NumericVector q, int k){
   int n = q.size(); //number of particles
   int d = x.ncol(); //dimensions
   k = k - 1;
@@ -143,7 +189,6 @@ double stat_distr_quot(NumericMatrix y, NumericMatrix x, NumericVector q, int k)
   double sumy = 0;
   for(int j = 0; j < n; j++){
     if(j == k) continue;
-    //Rcout << (a+b) << std::endl;
     sumx = 0;
     sumy = 0;
     
@@ -157,39 +202,122 @@ double stat_distr_quot(NumericMatrix y, NumericMatrix x, NumericVector q, int k)
     b += 1/ pow(sumy, 4);
     b -= 1/ pow(sumx, 4);
   }
-  //Rcout << (a+b) << std::endl;
+  return (a+b);
+}
+
+double E_diff_CPP(std::vector<std::vector<double>> y, std::vector<std::vector<double>> x, NumericVector q, int k){
+  int n = q.size(); //number of particles
+  int d = x[0].size(); //dimensions
+  k = k - 1;
+  
+  double a = 0;
+  double b = 0; 
+  double sumx = 0;
+  double sumy = 0;
+  for(int j = 0; j < n; j++){
+    if(j == k) continue;
+    sumx = 0;
+    sumy = 0;
+    
+    for(int l = 0; l < d; l++){
+      sumx += (x[k][l] - x[j][l])*(x[k][l] - x[j][l]);
+      sumy += (y[k][l] - y[j][l])*(y[k][l] - y[j][l]);
+    }
+    
+    a += q[k] * q[j] / sqrt(sumy);
+    a -= q[k] * q[j] / sqrt(sumx);
+    b += 1/ pow(sumy, 4);
+    b -= 1/ pow(sumx, 4);
+  }
   return (a+b);
 }
 
 // [[Rcpp::export]]
-NumericMatrix getInstr_distr(NumericMatrix x, int k, double v, double sigma = 1){
-  if(x.ncol() != 2) Rcout << "g is not defined for d!=2" << std::endl;
-  k = k - 1; // Shift index from R to CPP convention
+NumericMatrix MCMC_CPP(int nIt, int nPart, double vol, double t, NumericMatrix X0, NumericVector q){
+  double sigma = 1;
+  const double l = sqrt(vol);
+  NumericVector dE(nIt, 0.0);
+  dE[0] = E_CPP(X0, q);
   
-  double l = sqrt(v);
-  NumericVector r = rnorm(1, 0, sigma);
-  NumericVector phi = runif(1, 0, 1);
-  
-  //Generate distance r and direction phi. Get new coord with spherical trafo
-  NumericVector c = NumericVector::create(cos(phi[0]*M_PI)*r[0], sin(phi[0]*M_PI)*r[0]);
-  
-  for(int i=0; i < x.ncol(); i++){
-    x(k, i) +=  c[i]; 
-    // Periodic boundary wrap
-    if      (x(k, i) < -l/2) x(k,i) += l;
-    else if (x(k, i) > +l/2) x(k,i) -= l;  
+  int d = X0(1,Rcpp::_).size();
+  std::vector<std::vector<double>> X(nIt,std::vector<double>(d,0));
+  //std::vector<std::vector<double>> Y(nIt,std::vector<double>(d,0));
+  for (int i = 0; i < nPart; i++) {
+    for (int j = 0; j < d; j++) {
+      X[i][j] = X0(i,j);
+  //    Y[i][j] = X0(i,j);
+    }
   }
-  return x;
+  
+  double accept_rate = 0;
+  for (int n = 1; n < nIt; n++) {
+    const int k = std::floor(R::runif(0,nPart));
+    // ---------------------------------------------------------------------------
+    for(int j = 0; j < nPart; j++){
+      if(j == k) continue;
+      
+      double sum = 0;
+      for(int l = 0; l < d; l++){
+        sum += (X[k][l] - X[j][l])*(X[k][l] - X[j][l]);
+      }
+      
+      dE[n] -= q[k] * q[j] / sqrt(sum) + 1/ pow(sum, 4);
+    }
+    // ---------------------------------------------------------------------------
+    //Y = g_CPP(X, k, vol, sigma);
+    
+    const double old_x1 = X[k][0];
+    const double old_x2 = X[k][1];
+    
+    NumericVector r   = rnorm(1, 0, sigma);
+    NumericVector phi = runif(1, 0, 1);
+    //Generate distance r and direction phi. Get new coord with spherical trafo
+    NumericVector c = NumericVector::create(cos(phi[0]*M_PI)*r[0], sin(phi[0]*M_PI)*r[0]);
+    for(int i=0; i < d; i++){
+      X[k][i] +=  c(i); 
+      // Periodic boundary wrap
+      if      (X[k][i] < -l/2) X[k][i] += l;
+      else if (X[k][i] > +l/2) X[k][i] -= l;  
+    }
+    
+    // ---------------------------------------------------------------------------
+    //dE[n] = E_diff_CPP(Y, X, q, k);
+    for(int j = 0; j < nPart; j++){
+      if(j == k) continue;
+      
+      double sum = 0;
+      for(int l = 0; l < d; l++){
+        sum += (X[k][l] - X[j][l])*(X[k][l] - X[j][l]);
+      }
+      
+      dE[n] += q[k] * q[j] / sqrt(sum) + 1/ pow(sum, 4);
+    }
+    // ---------------------------------------------------------------------------
+    if (R::runif(0,1) < std::exp(-1/t * dE[n])) {
+      //X = Y;
+      accept_rate += 1;
+    } else {
+      dE[n] = 0;
+      X[k][0] = old_x1;
+      X[k][1] = old_x2;
+    }
+  }
+  Rcout << "Acceptance: " << accept_rate/nIt*100. << std::endl;
+  
+  NumericMatrix rmat(nIt,1);
+  rmat(Rcpp::_,0) = dE;
+  return rmat;
 }
 ```
 
-```{r random_walk_function}
-random_walk <- function(nIt, nPart, vol, t, X0, q) {
+```{r MCMC_R}
+MCMC_R <- function(nIt, nPart, vol, t, X0, q) {
   sigma <- 1   # Stepwidth
-  DeltaE <- rep(0,nIt)
-  DeltaE[1] <- getE(X0, q, t)
+  dE <- rep(0,nIt)
+  dE[1] <- E_R(X0, q)
 
   # Create array for N phasespace points of nPart particles in d dimensions.
+  d <- length(X0[1,])
   X <- array(data = NA, dim = c(nIt, nPart, d))
   X[1,,] <- X0
 
@@ -198,27 +326,27 @@ random_walk <- function(nIt, nPart, vol, t, X0, q) {
   for (n in c(2:nIt)) {
     # Generate Y_n
     k <- sample(c(1:nPart), 1)
-    y <- g(X[(n-1),,], k, vol, sigma)
+    y <- g_R(X[(n-1),,], k, vol, sigma)
     # Set X_n
-    DeltaE[n] <- pi_quot(y, X[(n-1),,], q, k, t)
-    if (runif(1) < exp(-1/t*DeltaE[n])) {
+    dE[n] <- E_diff_R(y, X[(n-1),,], q, k)
+    if (runif(1) < exp(-1/t*dE[n])) {
       X[n,,] <- y
       accept_rate <- accept_rate + 1
     } else {
-      DeltaE[n] <- 0
+      dE[n] <- 0
       X[n,,] <- X[(n-1),,]
     }
   }
   # print(accept_rate/nIt*100.)
-  return(list(X=X, DeltaE=DeltaE))
+  return(list(X=X, dE=dE))
 }
 ```
 
-```{r random_walk_function_cpp}
-random_walk_with_cpp <- function(nIt, nPart, vol, t, X0, q) {
+```{r MCMC_R_CPP_Hybrid}
+MCMC_R_CPP_hybrid <- function(nIt, nPart, vol, t, X0, q) {
   sigma <- 1   # Stepwidth
-  DeltaE    <- rep(0,nIt)
-  DeltaE[1] <- getE(X0, q, t)
+  dE    <- rep(0,nIt)
+  dE[1] <- E_CPP(X0, q)
   
   # Create array for N phasespace points of nPart particles in d dimensions.
   X <- array(data = NA, dim = c(nIt, nPart, d))
@@ -230,19 +358,19 @@ random_walk_with_cpp <- function(nIt, nPart, vol, t, X0, q) {
   for (n in c(2:nIt)) {
     # Generate Y_n
     k <- sample(c(1:nPart), 1)
-    X[n,,] <- getInstr_distr(X[(n-1),,], k, vol, sigma)
+    X[n,,] <- g_CPP(X[(n-1),,], k, vol, sigma)
     
     # Set X_n
-    DeltaE[n] <- stat_distr_quot(X[n,,], X[(n-1),,], q, k)
-    if (runif(1) < exp(-1/t*DeltaE[n])) {
+    dE[n] <- E_diff_CPP(X[n,,], X[(n-1),,], q, k)
+    if (runif(1) < exp(-1/t*dE[n])) {
       accept_rate <- accept_rate + 1
     } else {
-      DeltaE[n] <- 0
+      dE[n] <- 0
       X[n,,] <- X[(n-1),,]
     }
   }
   cat("Acceptance Rate:",accept_rate/(nIt-1)*100.,"% \n")
-  return(list(X=X, DeltaE=DeltaE))
+  return(list(X=X, dE=dE))
 }
 ```
 
@@ -250,9 +378,9 @@ random_walk_with_cpp <- function(nIt, nPart, vol, t, X0, q) {
 # HYPERPARAMETERS:
 d     <- 2    # Number of dimensions
 particleDensity <- 0.2
-vol   <- 1e4  # Volume of space
+vol   <- 5e4  # Volume of space
 nIt   <- 1e4  # Number of iterations
-beta  <- 10
+beta  <- 0.1
 # These below are implied
 t     <- 1/beta # Temperature of heat bath
 nPart <- ceiling(vol * particleDensity)  # Number of particles
@@ -278,81 +406,48 @@ cat("Number of {positive, negative} particles: {", length(which(q==+1)), ",", le
 ```
 
 ```{r test_cpp_implementation}
-# Run R implementation of MCMC
-cat("Run R implementation. . .\n")
+# # Run R implementation of MCMC
+# cat("Run R implementation. . .\n")
+# start_time <- Sys.time()
+# Rlist <- MCMC_R(nIt, nPart, vol, t, X0, q)
+# cat("Runtime: ",as.double(t1<- Sys.time() - start_time, units='secs'),"\n")
+# cat("Energy (indirect):",sum(Rlist$dE)                               ,"\n")
+# cat("Energy (direct)  :",E_R(Rlist$X[nIt,,],q)                       ,"\n")
+
+###########################################################################
+
+cat("\nRun R+RCPP hybrid implementation. . .\n")
 start_time <- Sys.time()
-Rlist <- random_walk(nIt, nPart, vol, t, X0, q)
+Rlist <- MCMC_R_CPP_hybrid(nIt, nPart, vol, t, X0, q)
 cat("Runtime: ",as.double(t1<- Sys.time() - start_time, units='secs'),"\n")
-cat("Energy (indirect):",sum(Rlist$DeltaE),"\n")
-cat("Energy (direct)  :",getE(Rlist$X[nIt,,],q,t),"\n")
 
-cat("\nRun RCPP implementation. . .\n")
-start_time <- Sys.time()
-Rlist <- random_walk_with_cpp(nIt, nPart, vol, t, X0, q)
-cat("Runtime: ",as.double(t2<- Sys.time() - start_time, units='secs'),"\n")
-
-cat("Energy (indirect):",b <- sum(Rlist$DeltaE),"\n")
-cat("Energy (direct)  :",getE(Rlist$X[nIt,,],q,t),"\n")
-cat("Energy (direct)  :",a <- getEnergy(Rlist$X[nIt,,],q),"\n")
+cat("Energy (indirect):",b <- sum(Rlist$dE)          ,"\n")
+# cat("Energy (direct)  :",E_R(Rlist$X[nIt,,],q)       ,"\n")
+cat("Energy (direct)  :",a <- E_CPP(Rlist$X[nIt,,],q),"\n")
 cat("indirect - direct:",b - a,"\n")
 
 show_particles(Rlist$X[1,,]  ,q, vol)
 show_particles(Rlist$X[nIt,,],q, vol)
 
-cat("Runtime improvement:",as.double(t2, units='secs')/as.double(t1, units='secs')*100,"%\n")
-```
-```{r test_pi_quot}
-dA <- c(
-  -3.3333333,
-  -3.3333333, 
-  -3.3333333,  
-  -0.8333333, 
-  -0.8333333, 
-  -1.4008586,  
-   1.5497336, 
-   1.5996487,  
-   1.6495384,  
-   3.3604185, 
-   -3.333333e+00,
-   -4.440892e-16,
-   3.333333e+00,
-   -3.333333e+00,
-   -4.440892e-16,
-   3.431614e+00,
-   -2.638768e+00,
-   1.488592e-01,
-   3.299282e+00,
-   -2.467200e+00
-)
-dB <- c(
-  -3.3333333,
-  -3.3333333, 
-  -3.3333333,  
-  -0.8333333, 
-  -0.05997832,  
-  -1.4008586,  
-   1.5497336, 
-   1.5996487,  
-   1.6495384,  
-   3.3604185, 
-   -3.333333e+00,
-   -4.440892e-16,
-   3.333333e+00,
-   -3.333333e+00,
-   -6.250337e-01,
-   3.431614e+00,
-   -2.638768e+00,
-   1.488592e-01,
-   3.299282e+00,
-   -2.467200e+00
-)
-A <- array(data = dA, dim = c(nPart, d))
-B <- array(data = dB, dim = c(nPart, d))
-Q <- c(1,  1, -1, -1, -1,  1,  1, -1, -1, -1)
-show_particles(A, Q, vol)
-show_particles(B, Q, vol)
+# cat("Runtime improvement:",as.double(t2, units='secs')/as.double(t1, units='secs')*100,"%\n")
 
-cat(stat_distr_quot(B, A, Q, 5),"\n")
-cat(pi_quot        (B, A, Q, 5),"\n")
+###########################################################################
+
+cat("\nRun RCPP implementation. . .\n")
+start_time <- Sys.time()
+Rlist <- MCMC_CPP(nIt, nPart, vol, t, X0, q)
+cat("Runtime: ",as.double(t2<- Sys.time() - start_time, units='secs'),"\n")
+
+cat("Energy (indirect):",b <- sum(Rlist[,1])          ,"\n")
+# cat("Energy (direct)  :",E_R(Rlist$X[nIt,,],q)       ,"\n")
+# cat("Energy (direct)  :",a <- E_CPP(Rlist$X[nIt,,],q),"\n")
+# cat("indirect - direct:",b - a,"\n")
+
+# show_particles(Rlist$X[1,,]  ,q, vol)
+# show_particles(Rlist$X[nIt,,],q, vol)
+
+cat("Runtime improvement:",as.double(t2, units='secs')/as.double(t1, units='secs')*100,"%\n")
+
+
 ```
 
