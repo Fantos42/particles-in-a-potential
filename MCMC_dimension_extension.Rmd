@@ -1,0 +1,382 @@
+---
+title: 'MCMC for particles in a potential'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(Rcpp)
+library(LaplacesDemon)
+library(scatterplot3d)
+library(rgl)
+```
+
+```{r visualization}
+show_particles <- function(x, q, V){
+  dim <- length(x[1,])
+  l <- V**(1/dim)
+  
+  ipos <- which(q==+1)
+  ineg <- which(q==-1)
+  posParticles <- x[ipos,]
+  negParticles <- x[ineg,]
+  
+  if (dim == 1) {
+    plot(NA, xlim=c(-l/2, l/2), ylim=c(-1.5,1.5), xlab='x', ylab='')
+  
+    if (length(ipos)!=0) {
+      arrows(x0=x[ipos,]-0.5,
+             y0=0,
+             x1=x[ipos,]+0.5,
+             y1=0,
+             length=0.02, angle=90, code=3, col='red')
+      arrows(x0=x[ipos,],
+             y0=1,
+             x1=x[ipos,],
+             y1=-1,
+             length=0.02, angle=90, code=0, col='red')
+    }
+    if (length(ineg)!=0) {
+      arrows(x0=x[ineg,]-0.5,
+             y0=0,
+             x1=x[ineg,]+0.5,
+             y1=0,
+             length=0.02, angle=90, code=3, col='blue')
+      arrows(x0=x[ineg,],
+             y0=1,
+             x1=x[ineg,],
+             y1=-1,
+             length=0.02, angle=90, code=0, col='blue')
+    }    
+  } else if (dim == 2) {
+    par(pty="s")
+    plot(NA, xlim=c(-l/2, l/2), ylim=c(-l/2,l/2), xlab='x', ylab='y', asp=1)
+    abline(h = -l/2)
+    abline(h = +l/2)
+    abline(v = -l/2)
+    abline(v = +l/2)
+    
+    arrows(x0=posParticles[,1]-0.5,
+           y0=posParticles[,2],
+           x1=posParticles[,1]+0.5,
+           y1=posParticles[,2],
+           length=0.01, angle=90, code=0, col='red')
+    arrows(x0=posParticles[,1],
+           y0=posParticles[,2]-0.5,
+           x1=posParticles[,1],
+           y1=posParticles[,2]+0.5,
+           length=0.01, angle=90, code=0, col='red')
+    arrows(x0=negParticles[,1]-0.5,
+           y0=negParticles[,2],
+           x1=negParticles[,1]+0.5,
+           y1=negParticles[,2],
+           length=0.01, angle=90, code=0, col='blue')
+    arrows(x0=negParticles[,1],
+           y0=negParticles[,2]-0.5,
+           x1=negParticles[,1],
+           y1=negParticles[,2]+0.5,
+           length=0.01, angle=90, code=0, col='blue')
+  } else if (dim == 3) {
+    # s3d <- scatterplot3d(x=NA, y=NA, z=NA, 
+    #                      xlim=c(-l/2,l/2), ylim=c(-l/2,l/2), zlim=c(-l/2,l/2),
+    #                      angle=20,xlab="x",ylab="y",zlab="z", color="red",
+    #                      main="3D particles", pch=20)
+    # s3d$points3d(x=posParticles[,1],
+    #              y=posParticles[,2],
+    #              z=posParticles[,3],
+    #              col="red")
+    # s3d$points3d(x=negParticles[,1],
+    #              y=negParticles[,2],
+    #              z=negParticles[,3],
+    #              col="blue")
+    ballradius <- 0.5
+    open3d()
+    plot3d(x=NA, y=NA, z=NA, xlim=c(-l/2,l/2),ylim=c(-l/2,l/2),zlim=c(-l/2,l/2), xlab="", ylab="", zlab="")
+    spheres3d(x=posParticles[,1], y=posParticles[,2], z=posParticles[,3], col = "red",
+              radius=ballradius)
+    spheres3d(x=negParticles[,1], y=negParticles[,2], z=negParticles[,3], col = "blue",
+              radius=ballradius)
+  }
+}
+```
+
+```{Rcpp Rcpp_functions}
+// [[Rcpp::plugins("cpp11")]]
+#include <Rcpp.h>
+#include <vector>
+using namespace Rcpp;
+
+// [[Rcpp::export]]
+double E_CPP(NumericMatrix x, NumericVector q){
+  int n = q.size(); //number of particles
+  int d = x.ncol(); //dimensions
+  
+  double a, b, sum = 0;
+  for(int i = 0; i < n-1; i++){
+    for(int j = i+1; j < n; j++){
+      sum = 0;
+      for(int k = 0; k < d; k++){
+        sum += (x(i,k) - x(j,k))*(x(i,k) - x(j,k));
+      }
+      a += q[i] * q[j] / sqrt(sum);
+      b += 1 / pow(sum, 4); 
+    }
+  }
+  return (a+b);
+}
+
+// [[Rcpp::export]]
+Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, NumericMatrix X0, NumericVector q){
+  int d = X0(1,Rcpp::_).size();
+  const double l = std::pow(vol, 1./d);
+  
+  NumericVector dE(nIt, 0.0);
+  dE[0] = E_CPP(X0, q);
+  
+  std::vector<std::vector<double>> X(nPart, std::vector<double>(d,0));
+  for (int i = 0; i < nPart; i++) {
+    for (int j = 0; j < d; j++) {
+      X[i][j] = X0(i,j);
+    }
+  }
+  double accept_rate = 0;
+  int k  = -1;
+  for (int n = 1; n < nIt; n++) {
+    k = std::floor(R::runif(0,nPart));
+    // ---------------------------------------------------------------------------
+    for(int j = 0; j < nPart; j++){
+      if(j == k) continue;
+      
+      double sum = 0;
+      for(int dim = 0; dim < d; dim++){
+        sum += (X[k][dim] - X[j][dim])*(X[k][dim] - X[j][dim]);
+      }
+      
+      dE[n] -= q[k] * q[j] / sqrt(sum) + 1/ pow(sum, 4);
+    }
+    // ---------------------------------------------------------------------------
+    // Make new candidates (Save old coordinates in case of rejection)
+    std::vector<double> old_x(d,0);
+    for (int i = 0; i < d; i++) old_x[i] = X[k][i];
+    
+    std::vector<double> shift_vec(d,0);
+    if (d == 1) {
+      const double r   = R::rnorm(0, sigma);
+      shift_vec = {r};
+    } else if (d == 2) {
+      const double r   = R::rnorm(0, sigma);
+      const double phi = R::runif(0, 1);
+      shift_vec = {cos(phi*M_PI)*r, sin(phi*M_PI)*r};
+    } else if (d == 3) {
+      const double r   = R::rnorm(0, sigma);
+      const double phi = R::runif(0, 1);
+      const double theta=R::runif(0, 1);
+      shift_vec = {cos(phi*M_PI)*sin(theta*M_PI)*r, sin(phi*M_PI)*sin(theta*M_PI)*r, cos(theta*M_PI)*r};
+    }
+    for(int i=0; i < d; i++){
+      X[k][i] += shift_vec[i]; 
+      // Periodic boundary wrap
+      if      (X[k][i] < -l/2) X[k][i] += l;
+      else if (X[k][i] > +l/2) X[k][i] -= l;
+    }
+    // ---------------------------------------------------------------------------
+    for(int j = 0; j < nPart; j++){
+      if(j == k) continue;
+      
+      double sum = 0;
+      for(int l = 0; l < d; l++){
+        sum += (X[k][l] - X[j][l])*(X[k][l] - X[j][l]);
+      }
+      
+      dE[n] += q[k] * q[j] / sqrt(sum) + 1/ pow(sum, 4);
+    }
+    // ---------------------------------------------------------------------------
+    if (R::runif(0,1) < std::exp(-1/t * dE[n])) {
+      //X = Y;
+      accept_rate += 1;
+    } else {
+      dE[n] = 0;
+      for (int i = 0; i < d; i++) X[k][i] = old_x[i];
+    }
+  }
+  Rcout << "Acceptance: " << accept_rate/nIt*100. << "%" << std::endl;
+  
+  
+  for (int i = 0; i < nPart; i++) {
+    for (int j = 0; j < d; j++) {
+      X0(i,j) = X[i][j];
+    }
+  }
+  
+  Rcpp::List rList = Rcpp::List::create(Named("dE")=dE, Named("X")=X0);
+  return rList;
+}
+```
+
+```{r}
+# --------------------------------------------------------------------------------
+# HYPERPARAMETERS:
+d               <- 2    # Number of dimensions
+particleDensity <- 0.05
+vol             <- 1e3   # Volume of space
+nIt             <- 6e5  # Number of iterations
+beta            <- 1024
+sigma           <- 0.5
+# These below are implied
+t     <- 1/beta # Temperature of heat bath
+nPart <- ceiling(vol * particleDensity)  # Number of particles
+l     <- vol**(1/d)
+# --------------------------------------------------------------------------------
+# Start configuration:
+# --------------- ---------------------------------------
+# --------------- Random positions
+X0 <- array(data = runif(nPart*d, min=-vol**(1/d)/2, max=vol**(1/d)/2), dim = c(nPart, d))
+# --------------- Positioned on a regular lattice
+# X0 <- array(data = NA, dim = c(nPart, d))
+# nRow  <- ceiling(nPart**(1./d))
+# nCol  <- round  (nPart**(1./d))
+# # 1 Dimension:
+# for (i in c(1:nPart)) {
+#   X0[i,1] <- (i-1) / nPart * vol - vol * (1/2 - 1/2/nRow)
+# }
+# # 2 Dimensions:
+# for (i in c(1:nPart)) {
+#   X0[i,1] <- (floor((i-1) / nCol)) * vol**(1/2) / nRow - vol**(1/2) * (1/2 - 1/2/nCol)
+#   X0[i,2] <- ((i-1) %% nCol      ) * vol**(1/2) / nCol - vol**(1/2) * (1/2 - 1/2/nCol)
+# }
+# 3 Dimensions:
+# for (i in c(1:nPart)) {
+#   a <- floor( (i-1)                         / nRow/nCol)
+#   b <- floor(((i-1)         - a*nCol*nRow)  / nCol     )
+#   c <-       ((i-1)- b*nCol - a*nCol*nRow) %% nCol
+#   X0[i,1] <- a/nRow * l - l/2 + l/nCol/2
+#   X0[i,2] <- b/nCol * l - l/2 + l/nCol/2
+#   X0[i,3] <- c/nCol * l - l/2 + l/nCol/2
+# }
+
+# --------------- ---------------------------------------
+# --------------- Random charges
+q  <- sample(c(-1,+1), size=nPart, replace=TRUE)
+# --------------- Alternating charges
+# q <- rep(1, nPart)
+# for (j in c(2:nPart)) {
+#   q[j] <- q[j-1]*-1
+# }
+# --------------- First positive, then negative charges
+# q <- c(rep(+1,ceiling(nPart/2)),rep(-1,floor(nPart/2)))
+# --------------- ---------------------------------------
+show_particles(X0,q,vol)
+cat("Number of {positive, negative} particles: {", length(which(q==+1)), ",", length(which(q==-1)),"}\n")
+# --------------------------------------------------------------------------------
+cat("\nRun MCMC particles in a potential . .\n")
+start_time <- Sys.time()
+MCMC_res <- MCMC_CPP(nIt, nPart, vol, t, sigma, X0, q)
+cat("Runtime: ",as.double(t2<- Sys.time() - start_time, units='secs'),"\n")
+show_particles(MCMC_res$X, q, vol)
+# --------------------------------------------------------------------------------
+```
+
+
+
+
+
+```{r evaluation}
+cat("Energy (indirect):", b <- sum(MCMC_res$dE), "\n")
+E <- cumsum(MCMC_res$dE)
+# plot(x=c(1:nIt),y=E[c(1:nIt)]+abs(min(E[c(1:nIt)]))+1,type='l',log='xy')
+
+# acf(E[c((nIt-5e4):nIt)], lag.max = 20000)
+IAT(E[c((nIt-5e4):nIt)])
+```
+
+```{r}
+## On some devices not all colors can be displayed.
+## Try the postscript device or use highlight.3d = FALSE.
+## example 1
+z <- seq(-10, 10, 0.01)
+x <- cos(z)
+y <- sin(z)
+scatterplot3d(x, y, z, highlight.3d=TRUE, col.axis="blue",col.grid="lightblue", main="scatterplot3d - 1", pch=20)
+
+## example 2
+temp <- seq(-pi, 0, length = 50)
+x <- c(rep(1, 50) %*% t(cos(temp)))
+y <- c(cos(temp) %*% t(sin(temp)))
+z <- c(sin(temp) %*% t(sin(temp)))
+scatterplot3d(x, y, z, highlight.3d=TRUE,col.axis="blue", col.grid="lightblue",main="scatterplot3d - 2", pch=20)
+
+## example 3
+temp <- seq(-pi, 0, length = 50)
+x <- c(rep(1, 50) %*% t(cos(temp)))
+y <- c(cos(temp) %*% t(sin(temp)))
+z <- 10 * c(sin(temp) %*% t(sin(temp)))
+color <- rep("green", length(x))
+temp <- seq(-10, 10, 0.01)
+x <- c(x, cos(temp))
+y <- c(y, sin(temp))
+z <- c(z, temp)
+color <- c(color, rep("red", length(temp)))
+scatterplot3d(x, y, z, color, pch=20, zlim=c(-2, 10),main="scatterplot3d - 3")
+
+## example 4
+my.mat <- matrix(runif(25), nrow=5)
+dimnames(my.mat) <- list(LETTERS[1:5], letters[11:15])
+my.mat # the matrix we want to plot ...
+s3d.dat <- data.frame(cols=as.vector(col(my.mat)),rows=as.vector(row(my.mat)),value=as.vector(my.mat))
+scatterplot3d(s3d.dat, type="h", lwd=5, pch=" ",x.ticklabs=colnames(my.mat), y.ticklabs=rownames(my.mat),color=grey(25:1/40), main="scatterplot3d - 4")
+
+## example 5
+data(trees)
+s3d <- scatterplot3d(trees, type="h", highlight.3d=TRUE,angle=55, scale.y=0.7, pch=16, main="scatterplot3d - 5")
+# Now adding some points to the "scatterplot3d"
+s3d$points3d(seq(10,20,2), seq(85,60,-5), seq(60,10,-10),col="blue", type="h", pch=16)
+# Now adding a regression plane to the "scatterplot3d"
+attach(trees)
+my.lm <- lm(Volume ~ Girth + Height)
+s3d$plane3d(my.lm, lty.box = "solid")
+
+## example 6; by Martin Maechler
+cubedraw <- function(res3d, min = 0, max = 255, cex = 2, text. = FALSE)
+  {
+  ## Purpose: Draw nice cube with corners
+  cube01 <- rbind(c(0,0,1), 0, c(1,0,0), c(1,1,0), 1, c(0,1,1), # < 6 outer
+                  c(1,0,1), c(0,1,0)) # <- "inner": fore- & back-ground
+  cub <- min + (max-min)* cube01
+  ## visibile corners + lines:
+  res3d$points3d(cub[c(1:6,1,7,3,7,5) ,], cex = cex, type ='b', lty = 1)
+  ## hidden corner + lines
+  res3d$points3d(cub[c(2,8,4,8,6),     ], cex = cex, type ='b', lty = 3)
+  if(text.)## debug
+    text(res3d$xyz.convert(cub), labels=1:nrow(cub), col='tomato', cex=2)}
+## 6 a) The named colors in R, i.e. colors()
+cc <- colors()
+crgb <- t(col2rgb(cc))
+par(xpd = TRUE)
+rr <- scatterplot3d(crgb, color = cc, box = FALSE, angle = 24,xlim = c(-50, 300), ylim = c(-50, 300), zlim = c(-50, 300))
+cubedraw(rr)
+## 6 b) The rainbow colors from rainbow(201)
+rbc <- rainbow(201)
+Rrb <- t(col2rgb(rbc))
+rR <- scatterplot3d(Rrb, color = rbc, box = FALSE, angle = 24,xlim = c(-50, 300), ylim = c(-50, 300), zlim = c(-50, 300))
+cubedraw(rR)
+rR$points3d(Rrb, col = rbc, pch = 16)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
