@@ -87,7 +87,7 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, NumericMatrix X0, 
   dE[0] = E_CPP(X0, q);
   
   int d = X0(1,Rcpp::_).size();
-  std::vector<std::vector<double>> X(nIt,std::vector<double>(d,0));
+  std::vector<std::vector<double>> X(nPart,std::vector<double>(d,0));
   for (int i = 0; i < nPart; i++) {
     for (int j = 0; j < d; j++) {
       X[i][j] = X0(i,j);
@@ -150,7 +150,7 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, NumericMatrix X0, 
       X[k][1] = old_x2;
     }
   }
-  Rcout << "Acceptance: " << accept_rate/nIt*100. << "%" << std::endl;
+ //Rcout << "Acceptance: " << accept_rate/nIt*100. << "%" << std::endl;
   
   
   for (int i = 0; i < nPart; i++) {
@@ -168,10 +168,10 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, NumericMatrix X0, 
 # --------------------------------------------------------------------------------
 # HYPERPARAMETERS:
 d               <- 2    # Number of dimensions
-particleDensity <- 0.6
-vol             <- 1e3  # Volume of space
-nIt             <- 6e5  # Number of iterations
-beta            <- 10000
+particleDensity <- 0.3
+vol             <- 5e2  # Volume of space
+nIt             <- 2e5  # Number of iterations
+beta            <- 1000
 # These below are implied
 t     <- 1/beta # Temperature of heat bath
 nPart <- ceiling(vol * particleDensity)  # Number of particles
@@ -216,12 +216,39 @@ cat("Energy (indirect):", b <- sum(MCMC_res$dE), "\n")
 E <- cumsum(MCMC_res$dE)
 plot(x=c(1:nIt),y=E[c(1:nIt)]+abs(min(E[c(1:nIt)]))+1,type='l',log='xy')
 
-acf(E[c(2e4:nIt)], lag.max = 20000)
-IAT(E[c(2e4:nIt)])
+# acf(E[c(2e4:nIt)], lag.max = 20000)
+# IAT(E[c(2e4:nIt)])
+acf(E)
+IAT(E)
+
 ```
+```{r temperature variation}
 
-
-
+# betas <- seq(10, 100, 10)
+betas <- c(0.2, 1, 5, 25, 125, 625, 3125, 15625)
+steps <- 10
+# iat_res <- array(NA, dim=c(length(betas), steps))
+iat_res <- rep(NA, steps)
+p <- array(NA, dim= c(length(betas), 2))
+for (i in c(1:length(betas))) {
+  cat(betas[i] , " : ")
+  for (j in c(1:steps)) {
+    cat(j, ",")
+    res <- MCMC_CPP(nIt, nPart, vol, 1/betas[i], X0, q)
+    E <- cumsum(res$dE)
+    iat_res[j] <- IAT(E[c(1e5:nIt)])
+  }
+  cat("\n")
+  p[i, 1] <- mean(iat_res)
+  p[i, 2] <- sqrt(var(iat_res)/steps)
+}
+# cat(mean(iat_res[1,]), "\n")
+# cat(sqrt(var(iat_res[1,])/steps), "\n")
+```
+```{r}
+plot(betas, p[ ,1], xlim=c(0.1, max(betas)+1), ylim = c(0, max(p[ ,1]+p[ ,2])))
+arrows(x0=betas, y0=p[ ,1]-p[ ,2], x1=betas, y1=p[ ,1]+p[ ,2], angle=90, code=3, length=0.2)
+```
 
 
 
