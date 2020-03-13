@@ -6,9 +6,10 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(Rcpp)
-library(LaplacesDemon)
-library(scatterplot3d)
-library(rgl)
+library(LaplacesDemon) # IAT
+library(scatterplot3d) # 3D Plotting
+library(rgl)           # 3D Plotting
+library(tidyverse)     # Remove duplicate elements
 ```
 
 ```{r visualization}
@@ -257,24 +258,69 @@ cat("Number of {positive, negative} particles: {", length(which(q==+1)), ",", le
 # --------------------------------------------------------------------------------
 cat("\nRun MCMC particles in a potential . .\n")
 start_time <- Sys.time()
-MCMC_res <- MCMC_CPP(nIt, nPart, vol, t, sigma, X0, q)
+MCMC_Single_Run <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, X0, q)
 cat("Runtime: ",as.double(t2<- Sys.time() - start_time, units='secs'),"\n")
-show_particles(MCMC_res$X, q, vol)
+show_particles(MCMC_Single_Run$X, q, vol)
+# --------------------------------------------------------------------------------
+rm(d, particleDensity, vol, beta, t, nPart, l, X0, q, start_time, t2)
 # --------------------------------------------------------------------------------
 ```
 
 ```{r evaluation}
-cat("Energy (indirect):", b <- sum(MCMC_res$dE), "\n")
-E <- cumsum(MCMC_res$dE)
+cat("Energy (indirect):", b <- sum(MCMC_Single_Run$dE), "\n")
+E <- cumsum(MCMC_Single_Run$dE)
 plot(x=c(1:nIt),y=E[c(1:nIt)]+abs(min(E[c(1:nIt)]))+1,type='l',log='xy')
 
 # acf(E[c(2e4:nIt)], lag.max = 20000)
 # IAT(E[c(2e4:nIt)])
 acf(E)
 IAT(E)
+
+rm(b)
+```
+
+```{r initial_creation_of_frame}
+# !!!!!!!!!!!!! BE CAREFUL NOT TO OVERWRITE EXISTING DATA !!!!!!!!!!!!!!!!!
+file_name <- "MCMC_Results_V1.RData"
+
+# Columns:
+# 1 "RUN_ID": Run No.
+# 2 "IAT"  : Integrated Autocorrelation Time
+# 3 "E_end": Energy of Last State
+# 4 "dim"  : Number of Dimensions
+# 5 "rho"  : Particle Density
+# 6 "vol"  : Cuboid Volume
+# 7 "beta" : Inverse Temperature
+# 8 "nIt"  : Number of MCMC iteration steps
+# 9 "nPart": Number of Simulated Particles
+#10 "t"    : Temperature
+#11 X_end  : 
+
+resFrame <- data.frame(
+  "RUN_ID"=NA,
+  "IAT"   =NA,
+  "E_end" =NA,
+  "dim"   =NA,
+  "rho"   =NA,
+  "vol"   =NA,
+  "beta"  =NA,
+  "nIt"   =NA,
+  "nPart" =NA,
+  "t"     =NA
+  )
+save(resFrame, file=file_name)
+
+rm(resFrame)
+rm(file_name)
 ```
 
 ```{r temperature variation}
+# --------------------------------------------------------------------------------
+# LOAD RESULTS DATA FRAME FROM DISK
+file_name <- "MCMC_Results_V1.RData"
+load(file_name)
+head(resFrame)
+run_no <- max(resFrame$RUN_ID, na.rm=TRUE)+1
 # --------------------------------------------------------------------------------
 # HYPERPARAMETERS:
 d               <- 2    # Number of dimensions
@@ -288,49 +334,78 @@ nPart <- ceiling(vol * particleDensity)  # Number of particles
 l     <- vol**(1/d)
 # --------------------------------------------------------------------------------
 betas <- 6**seq(from=0, to=5, by=1)
-betas <- seq(from=1, to=1000, length.out = 10)
-steps <- 8
+betas <- seq(from=1, to=17, length.out = 2)
+betas <- c(200,400,600)
 
-
-p <- array(NA, dim= c(length(betas), 2))
 Xs <- array(data = NA, dim = c(length(betas),nPart, d))
 qs <- array(data = NA, dim = c(length(betas),nPart   ))
 
-iat_res <- rep(NA, steps)
+nResamples <- 3
 for (i in c(1:length(betas))) {
   cat(betas[i] , " : ")
-  for (j in c(1:steps)) {
+  
+  temp.iats <- rep(NA, nResamples)
+  for (j in c(1:nResamples)) {
     cat(j, ",")
+    
     X0 <- array(data = runif(nPart*d, min=-vol**(1/d)/2, max=vol**(1/d)/2), dim = c(nPart, d))
     q  <- sample(c(-1,+1), size=nPart, replace=TRUE)
     res <- MCMC_CPP(nIt, nPart, vol, 1/betas[i], sigma=1, X0, q)
     E <- cumsum(res$dE)
-    
-    iat_res[j] <- IAT(E[c(1e5:nIt)])
+
+    # - - - - - - - - - SAVE RESULT TO FRAME
+    resFrame <- rbind(resFrame, list(run_no, IAT(E[c(1e5:nIt)]), E[nIt], d, particleDensity, vol, betas[i], nIt, nPart, 1/betas[i]))
+    # - - - - - - - - - 
   }
   cat("\n")
-  
+
   Xs[i,,] <- res$X
   qs[i,]  <- q
-  
-  p[i, 1] <- mean(iat_res)
-  p[i, 2] <- sqrt(var(iat_res)/steps)
 }
+
 # cat(mean(iat_res[1,]), "\n")
 # cat(sqrt(var(iat_res[1,])/steps), "\n")
+print(resFrame)
+
+save(resFrame, file=file_name)
+rm(resFrame)
+
+rm(qs, Xs, q, X0, temp.iats, E, i, j, nResamples, betas, d, particleDensity, vol, nIt, nPart, l) #Cleanup
 ```
 ```{r}
-plot(betas, p[ ,1], xlim=c(0.1, max(betas)+1), ylim = c(0, max(p[ ,1]+p[ ,2])), type = "b")
-arrows(x0=betas, y0=p[ ,1]-p[ ,2], x1=betas, y1=p[ ,1]+p[ ,2], angle=90, code=3, length=0.2)
+# --------------------------------------------------------------------------------
+# LOAD RESULTS DATA FRAME FROM DISK
+file_name <- "MCMC_Results_V1.RData"
+load(file_name)
+# --------------------------------------------------------------------------------
+# HYPERPARAMETERS:
+d               <- 2    # Number of dimensions
+particleDensity <- 0.5
+vol             <- 1e2  # Volume of space
+# beta            <- 1000
+# These below are implied
+# t     <- 1/beta # Temperature of heat bath
+nPart <- ceiling(vol * particleDensity)  # Number of particles
+l     <- vol**(1/d)
+# --------------------------------------------------------------------------------
+x.beta <- resFrame$beta[!duplicated(resFrame$beta)]
+x.beta <- sort(x.beta[!is.na(x.beta)])
+print(x.beta)
+print(max(x.beta))
+y.iat <- array(NA, dim= c(length(x.beta), 2)) # [,1]: IAT, [,2]: Standard Error
 
-plot(betas, p[ ,1], xlim=c(0.1, max(betas)+1), ylim = c(0, max(p[ ,1]+p[ ,2])), type = "b", log = "x")
-arrows(x0=betas, y0=p[ ,1]-p[ ,2], x1=betas, y1=p[ ,1]+p[ ,2], angle=90, code=3, length=0.2)
+for (i in c(1:length(x.beta))) {
+  idx <- which(resFrame$dim==d & resFrame$rho==particleDensity & resFrame$vol==vol & resFrame$beta==x.beta[i])
+  
+  y.iat[i,1] <- mean(resFrame$IAT[idx])
+  y.iat[i,2] <- sqrt(var(resFrame$IAT[idx]) / length(resFrame$IAT[idx]))
+}
+
+plot(x.beta, y.iat[ ,1], xlim=c(0.1, max(x.beta)+1), ylim = c(0, max(y.iat[ ,1]+y.iat[ ,2])), type = "b") 
+arrows(x0=x.beta, y0=y.iat[ ,1]-y.iat[ ,2], x1=x.beta, y1=y.iat[ ,1]+y.iat[ ,2], angle=90, code=3, length=0.2)
+
+rm(x.beta, y.iat, i, d, particleDensity, vol, nPart, l)
 ```
-
-
-
-
-
 
 
 
