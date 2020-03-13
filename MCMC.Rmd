@@ -7,48 +7,84 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(Rcpp)
 library(LaplacesDemon)
+library(scatterplot3d)
+library(rgl)
 ```
 
 ```{r visualization}
 show_particles <- function(x, q, V){
-  l <- V**(1/2)
-  # dev.new(width = 550, height = 550, unit = "px")
-  par(pty="s")
-  plot(NA, xlim=c(-l/2, l/2), ylim=c(-l/2,l/2), xlab='x', ylab='y', asp=1)
-
+  dim <- length(x[1,])
+  l <- V**(1/dim)
+  
   ipos <- which(q==+1)
-  posParticles <- x[ipos,]
-  # points(x=posParticles[,1],y=posParticles[,2], col='red' )
-  arrows(x0=posParticles[,1]-0.5,
-         y0=posParticles[,2],
-         x1=posParticles[,1]+0.5,
-         y1=posParticles[,2],
-         length=0.01, angle=90, code=0, col='red')
-  arrows(x0=posParticles[,1],
-         y0=posParticles[,2]-0.5,
-         x1=posParticles[,1],
-         y1=posParticles[,2]+0.5,
-         length=0.01, angle=90, code=0, col='red')
-
   ineg <- which(q==-1)
+  posParticles <- x[ipos,]
   negParticles <- x[ineg,]
-  # points(x=negParticles[,1],y=negParticles[,2], col='blue')
-  arrows(x0=negParticles[,1]-0.5,
-         y0=negParticles[,2],
-         x1=negParticles[,1]+0.5,
-         y1=negParticles[,2],
-         length=0.01, angle=90, code=0, col='blue')
-  arrows(x0=negParticles[,1],
-         y0=negParticles[,2]-0.5,
-         x1=negParticles[,1],
-         y1=negParticles[,2]+0.5,
-         length=0.01, angle=90, code=0, col='blue')
-
-
-  abline(h = -l/2)
-  abline(h = +l/2)
-  abline(v = -l/2)
-  abline(v = +l/2)
+  
+  if (dim == 1) {
+    plot(NA, xlim=c(-l/2, l/2), ylim=c(-1.5,1.5), xlab='x', ylab='')
+  
+    if (length(ipos)!=0) {
+      arrows(x0=x[ipos,]-0.5,
+             y0=0,
+             x1=x[ipos,]+0.5,
+             y1=0,
+             length=0.02, angle=90, code=3, col='red')
+      arrows(x0=x[ipos,],
+             y0=1,
+             x1=x[ipos,],
+             y1=-1,
+             length=0.02, angle=90, code=0, col='red')
+    }
+    if (length(ineg)!=0) {
+      arrows(x0=x[ineg,]-0.5,
+             y0=0,
+             x1=x[ineg,]+0.5,
+             y1=0,
+             length=0.02, angle=90, code=3, col='blue')
+      arrows(x0=x[ineg,],
+             y0=1,
+             x1=x[ineg,],
+             y1=-1,
+             length=0.02, angle=90, code=0, col='blue')
+    }    
+  } else if (dim == 2) {
+    par(pty="s")
+    plot(NA, xlim=c(-l/2, l/2), ylim=c(-l/2,l/2), xlab='x', ylab='y', asp=1)
+    abline(h = -l/2)
+    abline(h = +l/2)
+    abline(v = -l/2)
+    abline(v = +l/2)
+    
+    arrows(x0=posParticles[,1]-0.5,
+           y0=posParticles[,2],
+           x1=posParticles[,1]+0.5,
+           y1=posParticles[,2],
+           length=0.01, angle=90, code=0, col='red')
+    arrows(x0=posParticles[,1],
+           y0=posParticles[,2]-0.5,
+           x1=posParticles[,1],
+           y1=posParticles[,2]+0.5,
+           length=0.01, angle=90, code=0, col='red')
+    arrows(x0=negParticles[,1]-0.5,
+           y0=negParticles[,2],
+           x1=negParticles[,1]+0.5,
+           y1=negParticles[,2],
+           length=0.01, angle=90, code=0, col='blue')
+    arrows(x0=negParticles[,1],
+           y0=negParticles[,2]-0.5,
+           x1=negParticles[,1],
+           y1=negParticles[,2]+0.5,
+           length=0.01, angle=90, code=0, col='blue')
+  } else if (dim == 3) {
+    ballradius <- 0.5
+    open3d()
+    plot3d(x=NA, y=NA, z=NA, xlim=c(-l/2,l/2),ylim=c(-l/2,l/2),zlim=c(-l/2,l/2), xlab="", ylab="", zlab="")
+    spheres3d(x=posParticles[,1], y=posParticles[,2], z=posParticles[,3], col = "red",
+              radius=ballradius)
+    spheres3d(x=negParticles[,1], y=negParticles[,2], z=negParticles[,3], col = "blue",
+              radius=ballradius)
+  }
 }
 ```
 
@@ -78,25 +114,21 @@ double E_CPP(NumericMatrix x, NumericVector q){
 }
 
 // [[Rcpp::export]]
-Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, NumericMatrix X0, NumericVector q){
-  double sigma = 0.5;
-  double alpha = 0.05;
-  const double l = sqrt(vol);
+Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, NumericMatrix X0, NumericVector q){
+  int d = X0(1,Rcpp::_).size();
+  const double l = std::pow(vol, 1./d);
   
   NumericVector dE(nIt, 0.0);
   dE[0] = E_CPP(X0, q);
   
-  int d = X0(1,Rcpp::_).size();
-  std::vector<std::vector<double>> X(nPart,std::vector<double>(d,0));
+  std::vector<std::vector<double>> X(nPart, std::vector<double>(d,0));
   for (int i = 0; i < nPart; i++) {
     for (int j = 0; j < d; j++) {
       X[i][j] = X0(i,j);
     }
   }
-  
   double accept_rate = 0;
   int k  = -1;
-  int kk = -1;
   for (int n = 1; n < nIt; n++) {
     k = std::floor(R::runif(0,nPart));
     // ---------------------------------------------------------------------------
@@ -104,30 +136,36 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, NumericMatrix X0, 
       if(j == k) continue;
       
       double sum = 0;
-      for(int l = 0; l < d; l++){
-        sum += (X[k][l] - X[j][l])*(X[k][l] - X[j][l]);
+      for(int dim = 0; dim < d; dim++){
+        sum += (X[k][dim] - X[j][dim])*(X[k][dim] - X[j][dim]);
       }
       
       dE[n] -= q[k] * q[j] / sqrt(sum) + 1/ pow(sum, 4);
     }
     // ---------------------------------------------------------------------------
     // Make new candidates (Save old coordinates in case of rejection)
-    const double old_x1 = X[k][0];
-    const double old_x2 = X[k][1];
+    std::vector<double> old_x(d,0);
+    for (int i = 0; i < d; i++) old_x[i] = X[k][i];
     
-    if (R::runif(0,1) < 0) {
-      kk = std::floor(R::runif(0,nPart));
-    } else {
-      NumericVector r   = rnorm(1, 0, sigma);
-      NumericVector phi = runif(1, 0, 1);
-      //Generate distance r and direction phi. Get new coord with spherical trafo
-      NumericVector c = NumericVector::create(cos(phi[0]*M_PI)*r[0], sin(phi[0]*M_PI)*r[0]);
-      for(int i=0; i < d; i++){
-        X[k][i] +=  c(i); 
-        // Periodic boundary wrap
-        if      (X[k][i] < -l/2) X[k][i] += l;
-        else if (X[k][i] > +l/2) X[k][i] -= l;  
-      }
+    std::vector<double> shift_vec(d,0);
+    if (d == 1) {
+      const double r   = R::rnorm(0, sigma);
+      shift_vec = {r};
+    } else if (d == 2) {
+      const double r   = R::rnorm(0, sigma);
+      const double phi = R::runif(0, 1);
+      shift_vec = {cos(phi*M_PI)*r, sin(phi*M_PI)*r};
+    } else if (d == 3) {
+      const double r   = R::rnorm(0, sigma);
+      const double phi = R::runif(0, 1);
+      const double theta=R::runif(0, 1);
+      shift_vec = {cos(phi*M_PI)*sin(theta*M_PI)*r, sin(phi*M_PI)*sin(theta*M_PI)*r, cos(theta*M_PI)*r};
+    }
+    for(int i=0; i < d; i++){
+      X[k][i] += shift_vec[i]; 
+      // Periodic boundary wrap
+      if      (X[k][i] < -l/2) X[k][i] += l;
+      else if (X[k][i] > +l/2) X[k][i] -= l;
     }
     // ---------------------------------------------------------------------------
     for(int j = 0; j < nPart; j++){
@@ -146,11 +184,10 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, NumericMatrix X0, 
       accept_rate += 1;
     } else {
       dE[n] = 0;
-      X[k][0] = old_x1;
-      X[k][1] = old_x2;
+      for (int i = 0; i < d; i++) X[k][i] = old_x[i];
     }
   }
- //Rcout << "Acceptance: " << accept_rate/nIt*100. << "%" << std::endl;
+  //Rcout << "Acceptance: " << accept_rate/nIt*100. << "%" << std::endl;
   
   
   for (int i = 0; i < nPart; i++) {
@@ -159,7 +196,7 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, NumericMatrix X0, 
     }
   }
   
-  Rcpp::List rList = Rcpp::List::create(Named("dE")=dE, Named("X")=X0);
+  Rcpp::List rList = Rcpp::List::create(Named("dE")=dE, Named("X")=X0, Named("Accpetance")=accept_rate/nIt);
   return rList;
 }
 ```
@@ -168,13 +205,14 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, NumericMatrix X0, 
 # --------------------------------------------------------------------------------
 # HYPERPARAMETERS:
 d               <- 2    # Number of dimensions
-particleDensity <- 0.3
-vol             <- 5e2  # Volume of space
+particleDensity <- 0.5
+vol             <- 1e2  # Volume of space
 nIt             <- 2e5  # Number of iterations
 beta            <- 1000
 # These below are implied
 t     <- 1/beta # Temperature of heat bath
 nPart <- ceiling(vol * particleDensity)  # Number of particles
+l     <- vol**(1/d)
 # --------------------------------------------------------------------------------
 # Start configuration:
 # --------------- ---------------------------------------
@@ -182,21 +220,35 @@ nPart <- ceiling(vol * particleDensity)  # Number of particles
 X0 <- array(data = runif(nPart*d, min=-vol**(1/d)/2, max=vol**(1/d)/2), dim = c(nPart, d))
 # --------------- Positioned on a regular lattice
 # X0 <- array(data = NA, dim = c(nPart, d))
-# nRow <- ceiling(sqrt(nPart))
-# nCol <- round  (sqrt(nPart))
+# nRow  <- ceiling(nPart**(1./d))
+# nCol  <- round  (nPart**(1./d))
+# # 1 Dimension:
+# for (i in c(1:nPart)) {
+#   X0[i,1] <- (i-1) / nPart * vol - vol * (1/2 - 1/2/nRow)
+# }
+# # 2 Dimensions:
 # for (i in c(1:nPart)) {
 #   X0[i,1] <- (floor((i-1) / nCol)) * vol**(1/2) / nRow - vol**(1/2) * (1/2 - 1/2/nCol)
 #   X0[i,2] <- ((i-1) %% nCol      ) * vol**(1/2) / nCol - vol**(1/2) * (1/2 - 1/2/nCol)
 # }
+# 3 Dimensions:
+# for (i in c(1:nPart)) {
+#   a <- floor( (i-1)                         / nRow/nCol)
+#   b <- floor(((i-1)         - a*nCol*nRow)  / nCol     )
+#   c <-       ((i-1)- b*nCol - a*nCol*nRow) %% nCol
+#   X0[i,1] <- a/nRow * l - l/2 + l/nCol/2
+#   X0[i,2] <- b/nCol * l - l/2 + l/nCol/2
+#   X0[i,3] <- c/nCol * l - l/2 + l/nCol/2
+# }
 
 # --------------- ---------------------------------------
 # --------------- Random charges
-#q  <- sample(c(-1,+1), size=nPart, replace=TRUE)
+q  <- sample(c(-1,+1), size=nPart, replace=TRUE)
 # --------------- Alternating charges
-q <- rep(1, nPart)
-for (j in c(2:nPart)) {
-  q[j] <- q[j-1]*-1
-}
+# q <- rep(1, nPart)
+# for (j in c(2:nPart)) {
+#   q[j] <- q[j-1]*-1
+# }
 # --------------- First positive, then negative charges
 # q <- c(rep(+1,ceiling(nPart/2)),rep(-1,floor(nPart/2)))
 # --------------- ---------------------------------------
@@ -205,7 +257,7 @@ cat("Number of {positive, negative} particles: {", length(which(q==+1)), ",", le
 # --------------------------------------------------------------------------------
 cat("\nRun MCMC particles in a potential . .\n")
 start_time <- Sys.time()
-MCMC_res <- MCMC_CPP(nIt, nPart, vol, t, X0, q)
+MCMC_res <- MCMC_CPP(nIt, nPart, vol, t, sigma, X0, q)
 cat("Runtime: ",as.double(t2<- Sys.time() - start_time, units='secs'),"\n")
 show_particles(MCMC_res$X, q, vol)
 # --------------------------------------------------------------------------------
@@ -220,25 +272,47 @@ plot(x=c(1:nIt),y=E[c(1:nIt)]+abs(min(E[c(1:nIt)]))+1,type='l',log='xy')
 # IAT(E[c(2e4:nIt)])
 acf(E)
 IAT(E)
-
 ```
-```{r temperature variation}
 
-# betas <- seq(10, 100, 10)
-betas <- c(0.2, 1, 5, 25, 125, 625, 3125, 15625)
-steps <- 10
-# iat_res <- array(NA, dim=c(length(betas), steps))
-iat_res <- rep(NA, steps)
+```{r temperature variation}
+# --------------------------------------------------------------------------------
+# HYPERPARAMETERS:
+d               <- 2    # Number of dimensions
+particleDensity <- 0.5
+vol             <- 1e2  # Volume of space
+nIt             <- 2e5  # Number of iterations
+# beta            <- 1000
+# These below are implied
+# t     <- 1/beta # Temperature of heat bath
+nPart <- ceiling(vol * particleDensity)  # Number of particles
+l     <- vol**(1/d)
+# --------------------------------------------------------------------------------
+betas <- 6**seq(from=0, to=5, by=1)
+betas <- seq(from=1, to=1000, length.out = 10)
+steps <- 8
+
+
 p <- array(NA, dim= c(length(betas), 2))
+Xs <- array(data = NA, dim = c(length(betas),nPart, d))
+qs <- array(data = NA, dim = c(length(betas),nPart   ))
+
+iat_res <- rep(NA, steps)
 for (i in c(1:length(betas))) {
   cat(betas[i] , " : ")
   for (j in c(1:steps)) {
     cat(j, ",")
-    res <- MCMC_CPP(nIt, nPart, vol, 1/betas[i], X0, q)
+    X0 <- array(data = runif(nPart*d, min=-vol**(1/d)/2, max=vol**(1/d)/2), dim = c(nPart, d))
+    q  <- sample(c(-1,+1), size=nPart, replace=TRUE)
+    res <- MCMC_CPP(nIt, nPart, vol, 1/betas[i], sigma=1, X0, q)
     E <- cumsum(res$dE)
+    
     iat_res[j] <- IAT(E[c(1e5:nIt)])
   }
   cat("\n")
+  
+  Xs[i,,] <- res$X
+  qs[i,]  <- q
+  
   p[i, 1] <- mean(iat_res)
   p[i, 2] <- sqrt(var(iat_res)/steps)
 }
@@ -246,7 +320,10 @@ for (i in c(1:length(betas))) {
 # cat(sqrt(var(iat_res[1,])/steps), "\n")
 ```
 ```{r}
-plot(betas, p[ ,1], xlim=c(0.1, max(betas)+1), ylim = c(0, max(p[ ,1]+p[ ,2])))
+plot(betas, p[ ,1], xlim=c(0.1, max(betas)+1), ylim = c(0, max(p[ ,1]+p[ ,2])), type = "b")
+arrows(x0=betas, y0=p[ ,1]-p[ ,2], x1=betas, y1=p[ ,1]+p[ ,2], angle=90, code=3, length=0.2)
+
+plot(betas, p[ ,1], xlim=c(0.1, max(betas)+1), ylim = c(0, max(p[ ,1]+p[ ,2])), type = "b", log = "x")
 arrows(x0=betas, y0=p[ ,1]-p[ ,2], x1=betas, y1=p[ ,1]+p[ ,2], angle=90, code=3, length=0.2)
 ```
 
