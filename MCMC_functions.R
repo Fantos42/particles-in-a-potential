@@ -80,8 +80,9 @@ show_particles <- function(x, q, V){
   # dev.off()
 }
 
-cat("Load MCMC_functions.cpp.\n")
+print("Load MCMC_functions.cpp.\n")
 
 sourceCpp("MCMC_functions.cpp")
+sourceCpp("MCMC_Collective.cpp")
 
-cat("Loaded MCMC_functions.R.\n")
+print("Loaded MCMC_functions.R.\n")

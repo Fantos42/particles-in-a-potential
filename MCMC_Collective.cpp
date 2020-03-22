@@ -3,66 +3,9 @@
 #include <vector>
 using namespace Rcpp;
 
-
-// =======================================================
-// ========================================= IAP_CPP
-// =======================================================
-// [[Rcpp::export]]
-double IAT_CPP(NumericVector x){
-  const int n = x.size(); //number of particles
-  std::vector<double> X (n, 0);
-  for (int i = 0; i < n; i++) X [i] = x(i);
-  
-  const int maxlag = std::max(3., n/2.);
-  
-  double mu = 0;
-  for (int i = 0; i < n; i++) mu += X[i];
-  mu /= n;
-  
-  double Ga0 = 0;
-  double Ga1 = 0;
-  double Ga2 = 0;
-  double Ga3 = 0;
-  
-  double lg;
-  
-  lg = 0;
-  for (int i = lg; i < n; i++) Ga0 += (X[i-lg] - mu) * (X[i] - mu) / (n-lg-1.);
-  lg = 1;
-  for (int i = lg; i < n; i++) Ga1 += (X[i-lg] - mu) * (X[i] - mu) / (n-lg-1.);
-  lg = 2;
-  for (int i = lg; i < n; i++) Ga2 += (X[i-lg] - mu) * (X[i] - mu) / (n-lg-1.);
-  lg = 3;
-  for (int i = lg; i < n; i++) Ga3 += (X[i-lg] - mu) * (X[i] - mu) / (n-lg-1.);
-  
-  double Ga [] = {Ga0+Ga1, Ga2+Ga3};
-  
-  double m = 1;
-  double IAT = Ga[0];
-  while ( (Ga[1]>0.0) && (Ga[1] < Ga[0] || Ga[1]>0.1) ) {
-    m += 1;
-    if (2*m+1 > maxlag) {
-      Rcout << "Not enough data, maxlag= " << maxlag << std::endl;
-      return maxlag;
-    }
-    Ga[0] = Ga[1];
-    lg = 2*m;
-    Ga[1] = 0;
-    for (int i = lg; i < n; i++) Ga[1] += (X[i-lg] - mu) * (X[i] - mu) / (n-lg-1.);
-    lg = 2*m + 1;
-    for (int i = lg; i < n; i++) Ga[1] += (X[i-lg] - mu) * (X[i] - mu) / (n-lg-1.);
-    IAT += Ga[0];
-  }
-  Rcout << m*2 << std::endl;
-  //Rcout << "Breakpoint: " << 2*m << std::endl;
-  IAT = (-1. + 2. * IAT / Ga0) / 2.;
-  return IAT;
-}
-
 // =======================================================
 // ========================================= Calculate Energy
 // =======================================================
-// [[Rcpp::export]]
 double E_CPP(NumericMatrix x, NumericVector q){
   int n = q.size(); //number of particles
   int d = x.ncol(); //dimensions
@@ -86,7 +29,6 @@ double E_CPP(NumericMatrix x, NumericVector q){
 // =======================================================
 // ========================================= estimate_clstSize
 // =======================================================
-
 int getFreeIndex(std::vector<int> idx, int k) {
   const int nPart = idx.size();
   
@@ -100,18 +42,22 @@ int getFreeIndex(std::vector<int> idx, int k) {
   
   return -1;
 }
-
-double getDist(std::vector<double> a, std::vector<double> b) {
+// [[Rcpp::export]]
+double getDist(std::vector<double> a, std::vector<double> b, const double l) {
   const int dim = a.size();
-  
   double dist = 0;
   for (int i = 0; i < dim; i++) {
+    if        ((a[i] - b[i]) > +l/2){
+      b[i] += l;
+    } else if ((a[i] - b[i]) < -l/2){
+      b[i] -= l;
+    }
     dist += (a[i] - b[i])*(a[i] - b[i]);
   }
   return std::sqrt(dist);
 }
 
-double estimate_clstSize(std::vector<std::vector<double>> X) {
+double estimate_clstSize(std::vector<std::vector<double>> X, const double L) {
   const int nPart = X.size();
   
   const double min_dist = 2;
@@ -154,12 +100,12 @@ double estimate_clstSize(std::vector<std::vector<double>> X) {
       {
         int free_idx = getFreeIndex(idx, k+1);
         
-        if (getDist(X[clst_idx], X[free_idx]) < min_dist) {
+        if (getDist(X[clst_idx], X[free_idx], L) < min_dist) {
           clusters.back()[cluster_sizes.back()]  = free_idx;
           cluster_sizes.back()  += 1; // Current cluster has grown by 1
           idx[free_idx]          = 0; // Particle has been assigned to a cluster
           nFree                 -= 1; // One further particle is assigned to a cluster
-          //k                     -= 1; // Neccessary for correct procedure
+          k                     -= 1; // Neccessary for correct procedure
         }
         
       }
@@ -179,13 +125,14 @@ double estimate_clstSize(std::vector<std::vector<double>> X) {
 // ========================================= MCMC_CPP
 // =======================================================
 // [[Rcpp::export]]
-Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, NumericMatrix X0, NumericVector q){
+Rcpp::List MCMC_CPP_Collective(int nIt, int nPart, double vol, double t, double sigma, NumericMatrix X0, NumericVector q){
   int d = X0(1,Rcpp::_).size();
   const double l = std::pow(vol, 1./d);
   const double t0= t;
   
   const double T_burnIn_1 = 2e6;
   const double T_burnIn_2 = 2e6;
+  const double min_dist = 2;
   // ----------------------- Observables
   NumericVector dE(nIt, 0.0);
   dE[0] = E_CPP(X0, q);
@@ -206,23 +153,84 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, Nume
   double accept_rate = 0;
   int k  = -1;
   for (int n = 1; n < nIt; n++) {
+    // Sample bonds to create a cluster
     k = std::floor(R::runif(0,nPart));
-    // ---------------------------------------------------------------------------
-    for(int j = 0; j < nPart; j++){
-      if(j == k) continue;
-      
-      double sum = 0;
-      for(int dim = 0; dim < d; dim++){
-        sum += (X[k][dim] - X[j][dim])*(X[k][dim] - X[j][dim]);
+    int nFree = nPart-1;
+    
+    std::vector<int> bonded_particles;
+    bonded_particles.push_back(k);
+    std::vector<int> id(nPart, 1);
+    id[k] = 0;
+    std::vector<int> not_bonded_particles;
+    std::vector<std::vector<int>> failed_bonds;
+    
+    for(unsigned int i = 0; i < bonded_particles.size(); i++){
+      for(int j = 0; j < nFree; j++){
+        int free_id = getFreeIndex(id, j+1);
+        if(getDist(X[bonded_particles[i]], X[free_id], l) < min_dist){
+          if(R::runif(0,1) < 1-std::exp(-1./t)){
+            bonded_particles.push_back(free_id);
+            id[free_id] = 0;
+            nFree--;
+            j--;
+          }else{
+            std::vector<int> tmp = {bonded_particles[i], free_id};
+            failed_bonds.push_back(tmp);
+          }
+        }
       }
-      
-      dE[n] -= q[k] * q[j] / sqrt(sum) + 1/ pow(sum, 4);
     }
+    
+    int n_out_bef = 0;
+    for(unsigned int i = 0; i < failed_bonds.size(); i++){
+      for(unsigned int j = 0; j < bonded_particles.size(); j++){
+        if(failed_bonds[i][1] == bonded_particles[j]) continue;
+        n_out_bef++;
+      }
+    }
+      
+    for(int u = 0; u < nPart; u++){
+      for(unsigned int j = 0; j < bonded_particles.size(); j++){
+        if(u == bonded_particles[j]) continue;
+        not_bonded_particles.push_back(u);
+      } 
+    }
+    
+    
+    
+    // ---------------------------------------------------------------------------
+    for(unsigned int i=0; i < bonded_particles.size(); i++){
+      for(unsigned int j = 0; j < not_bonded_particles.size(); j++){
+        double sum = 0;
+        for(int dim = 0; dim < d; dim++){
+          sum += (X[bonded_particles[i]][dim] - X[not_bonded_particles[j]][dim])*(X[bonded_particles[i]][dim] - X[not_bonded_particles[j]][dim]);
+        }
+        
+        dE[n] -= q[bonded_particles[i]] * q[not_bonded_particles[j]] / sqrt(sum) + 1/ pow(sum, 4);  
+      }
+    }
+    
+    // for(int j = 0; j < nPart; j++){
+    //   if(j == k) continue;
+    //   
+    //   double sum = 0;
+    //   for(int dim = 0; dim < d; dim++){
+    //     sum += (X[k][dim] - X[j][dim])*(X[k][dim] - X[j][dim]);
+    //   }
+    //   
+    //   dE[n] -= q[k] * q[j] / sqrt(sum) + 1/ pow(sum, 4);
+    // }
     // ---------------------------------------------------------------------------
     // Make new candidates (Save old coordinates in case of rejection)
+    std::vector<std::vector<double>> old_vals;
     std::vector<double> old_x(d,0);
-    for (int i = 0; i < d; i++) old_x[i] = X[k][i];
+    for(unsigned int w = 0; w < bonded_particles.size(); w++){
+      for (int i = 0; i < d; i++) old_x[i] = X[bonded_particles[w]][i];
+      old_vals.push_back(old_x);
+    }
     
+    
+    // Make shift vector
     std::vector<double> shift_vec(d,0);
     if (d == 1) {
       const double r   = R::rnorm(0, sigma);
@@ -237,23 +245,55 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, Nume
       const double theta=R::runif(0, 1);
       shift_vec = {cos(phi*M_PI)*sin(theta*M_PI)*r, sin(phi*M_PI)*sin(theta*M_PI)*r, cos(theta*M_PI)*r};
     }
-    for(int i=0; i < d; i++){
-      X[k][i] += shift_vec[i]; 
-      // Periodic boundary wrap
-      if      (X[k][i] < -l/2) X[k][i] += l;
-      else if (X[k][i] > +l/2) X[k][i] -= l;
+    
+    // Apply shift vector to all cluster particles
+    for(unsigned int p = 0; p < bonded_particles.size(); p++){
+      for(int i=0; i < d; i++){
+        X[bonded_particles[p]][i] += shift_vec[i]; 
+        // Periodic boundary wrap
+        if      (X[bonded_particles[p]][i] < -l/2) X[bonded_particles[p]][i] += l;
+        else if (X[bonded_particles[p]][i] > +l/2) X[bonded_particles[p]][i] -= l;
+      }  
     }
+    
+    // for(int i=0; i < d; i++){
+    //   X[k][i] += shift_vec[i]; 
+    //   // Periodic boundary wrap
+    //   if      (X[k][i] < -l/2) X[k][i] += l;
+    //   else if (X[k][i] > +l/2) X[k][i] -= l;
+    // }
     // ---------------------------------------------------------------------------
-    for(int j = 0; j < nPart; j++){
-      if(j == k) continue;
-      
-      double sum = 0;
-      for(int l = 0; l < d; l++){
-        sum += (X[k][l] - X[j][l])*(X[k][l] - X[j][l]);
+    for(unsigned int i=0; i < bonded_particles.size(); i++){
+      for(unsigned int j = 0; j < not_bonded_particles.size(); j++){
+        double sum = 0;
+        for(int dim = 0; dim < d; dim++){
+          sum += (X[bonded_particles[i]][dim] - X[not_bonded_particles[j]][dim])*(X[bonded_particles[i]][dim] - X[not_bonded_particles[j]][dim]);
+        }
+        
+        dE[n] += q[bonded_particles[i]] * q[not_bonded_particles[j]] / sqrt(sum) + 1/ pow(sum, 4);  
       }
-      
-      dE[n] += q[k] * q[j] / sqrt(sum) + 1/ pow(sum, 4);
     }
+    
+    // for(int j = 0; j < nPart; j++){
+    //   if(j == k) continue;
+    //   
+    //   double sum = 0;
+    //   for(int l = 0; l < d; l++){
+    //     sum += (X[k][l] - X[j][l])*(X[k][l] - X[j][l]);
+    //   }
+    //   
+    //   dE[n] += q[k] * q[j] / sqrt(sum) + 1/ pow(sum, 4);
+    // }
+    // ---------------------------------------------------------------------------
+    int n_out_aft = 0;
+    for(unsigned int i=0; i < bonded_particles.size(); i++){
+      for(unsigned int j = 0; j < not_bonded_particles.size(); j++){
+       if(getDist(X[bonded_particles[i]], X[not_bonded_particles[j]], l) < min_dist){
+         n_out_aft++;
+       }
+      }
+    }
+    
     // ---------------------------------------------------------------------------
     if (n < T_burnIn_1) {
       t = std::exp(std::log(10) * (+2. + (double)n / T_burnIn_1 * (std::log10(t0)-2.)));
@@ -261,16 +301,19 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, Nume
       t = t0;
     }
     //if (n == T_burnIn_1-2) Rcout << "Temperature: " << t << ", t0:" << t0 << std::endl;
-    if (R::runif(0,1) < std::exp(-1./t * dE[n])) {
+    if (R::runif(0,1) < std::exp(-1./t * dE[n])*pow(( 1-std::exp(-1./t)), (n_out_bef-n_out_aft))) {
       //X = Y;
       if (n > T_burnIn_2) accept_rate += 1;
     } else {
       dE[n] = 0;
-      for (int i = 0; i < d; i++) X[k][i] = old_x[i];
+      for(unsigned int w = 0; w < bonded_particles.size(); w++){
+        for (int i = 0; i < d; i++) X[bonded_particles[w]][i] = old_x[i];
+        old_vals.push_back(old_x);
+      }
     }
     // ---------------------------------------------------------------------------
     if ((n-n_min_clstSize) >= k_clstSize * stp_clstSize) {
-      clstSize[k_clstSize] = estimate_clstSize(X);
+      clstSize[k_clstSize] = estimate_clstSize(X, l);
       k_clstSize++;
     }
     // ---------------------------------------------------------------------------
@@ -295,7 +338,6 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, Nume
   return rList;
 }
 
-
 /*** R
-print("Loaded MCMC_functions.cpp.")
+print("Loaded MCMC_Collective.cpp.")
 */

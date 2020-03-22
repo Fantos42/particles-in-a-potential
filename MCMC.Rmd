@@ -14,11 +14,11 @@ source("DataFrameHelper.R")
 ```{r single_simulation}
 # --------------------------------------------------------------------------------
 # HYPERPARAMETERS:
-d               <- 3    # Number of dimensions
+d               <- 2    # Number of dimensions
 particleDensity <- 0.05
 vol             <- 2e3  # Volume of space
-nIt             <- 2e5  # Number of iterations
-beta            <- 1e3
+nIt             <- 1e7  # Number of iterations
+beta            <- 1e2
 # These below are implied
 t     <- 1/beta # Temperature of heat bath
 nPart <- ceiling(vol * particleDensity)  # Number of particles
@@ -32,7 +32,7 @@ q <- c(rep(+1,ceiling(nPart/2)),rep(-1,floor(nPart/2)))
 cat("Run MCMC particles in a potential . .\n")
 
 start_time <- Sys.time()
-MCMC_Single_Run <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, X0, q)
+MCMC_Single_Run <- MCMC_CPP_Collective(nIt, nPart, vol, t, sigma=1, X0, q)
 end_time <- Sys.time()
 # --------------------------------------------------------------------------------
 # pdf("particle_config_out.pdf")
@@ -50,11 +50,24 @@ rm(d, particleDensity, vol, beta, t, nPart, l, X0, q, start_time, end_time, t2)
 
 ```{r evaluation_acf}
 E <- cumsum(MCMC_Single_Run$dE)
-plot(x=c(1:nIt),y=E[c(1:nIt)]+abs(min(E[c(1:nIt)]))+1,type='l',log='y', xlim = c(1e2,nIt))
+x.ticks <- c(9e6: nIt)
+plot(x=x.ticks,y=E[x.ticks],type='l',log='')
+# plot(x=x.ticks,y=E[x.ticks]+abs(min(E[x.ticks]))+1,type='l',log='y')
+rm(x.ticks)
+```
 
+```{r}
+acf_range <- c((nIt-4e5):nIt)
 start_time <- Sys.time()
-acf(E[c(1e5:nIt)], lag.max = 50000)
+acf(E[acf_range], lag.max = 25000)
 cat("ACF runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
+```
+
+```{r}
+acf_range <- c((nIt-1e6):nIt)
+start_time <- Sys.time()
+cat("IAT_custom: ",IAT_CPP(E[acf_range]),"\n")
+cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
 ```
 
 ```{r evaluation_iat}
@@ -63,24 +76,24 @@ cat("ACF runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds 
 # cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
 
 start_time <- Sys.time()
-cat("IAT_custom: ",IAT_CPP(E[c(1e5:2e5)]),"\n")
+cat("IAT_custom: ",IAT_CPP(E[c(3.9e6:nIt)]),"\n")
 cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
 
-start_time <- Sys.time()
-cat("IAT_custom: ",IAT_CPP(E[c(1e5:3e5)]),"\n")
-cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
+# start_time <- Sys.time()
+# cat("IAT_custom: ",IAT_CPP(E[c(1e5:3e5)]),"\n")
+# cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
 
-start_time <- Sys.time()
-cat("IAT_custom: ",IAT_CPP(E[c(1e5:4e5)]),"\n")
-cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
+# start_time <- Sys.time()
+# cat("IAT_custom: ",IAT_CPP(E[c(1e5:4e5)]),"\n")
+# cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
 
-start_time <- Sys.time()
-cat("IAT_custom: ",IAT_CPP(E[c(2e5:3e5)]),"\n")
-cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
+# start_time <- Sys.time()
+# cat("IAT_custom: ",IAT_CPP(E[c(2e5:3e5)]),"\n")
+# cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
 
-start_time <- Sys.time()
-cat("IAT_custom: ",IAT_CPP(E[c(3e5:4e5)]),"\n")
-cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
+# start_time <- Sys.time()
+# cat("IAT_custom: ",IAT_CPP(E[c(3e5:4e5)]),"\n")
+# cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
 
 # rm(start_time)
 ```
