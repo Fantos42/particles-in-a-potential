@@ -184,8 +184,8 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, Nume
   const double l = std::pow(vol, 1./d);
   const double t0= t;
   
-  const double T_burnIn_1 = 2e6;
-  const double T_burnIn_2 = 2e6;
+  const double T_burnIn_1 = 1e5;
+  const double T_burnIn_2 = 1e5;
   // ----------------------- Observables
   NumericVector dE(nIt, 0.0);
   dE[0] = E_CPP(X0, q);

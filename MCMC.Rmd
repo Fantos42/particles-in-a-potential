@@ -17,8 +17,8 @@ source("DataFrameHelper.R")
 d               <- 2    # Number of dimensions
 particleDensity <- 0.05
 vol             <- 2e3  # Volume of space
-nIt             <- 1e7  # Number of iterations
-beta            <- 1e2
+nIt             <- 0.5e6  # Number of iterations
+beta            <- 1e3
 # These below are implied
 t     <- 1/beta # Temperature of heat bath
 nPart <- ceiling(vol * particleDensity)  # Number of particles
@@ -27,7 +27,7 @@ l     <- vol**(1/d)
 # Start configuration:
 X0 <- array(data = runif(nPart*d, min=-vol**(1/d)/2, max=vol**(1/d)/2), dim = c(nPart, d))
 q <- c(rep(+1,ceiling(nPart/2)),rep(-1,floor(nPart/2)))
-# show_particles(X0               , q, vol)
+show_particles(X0, q, vol)
 # --------------------------------------------------------------------------------
 cat("Run MCMC particles in a potential . .\n")
 
@@ -42,7 +42,9 @@ show_particles(MCMC_Single_Run$X, q, vol)
 cat("Number of {positive, negative} particles: {", length(which(q==+1)), ",", length(which(q==-1)),"}\n")
 cat("Runtime: ",as.double(t2<- end_time - start_time, units='secs'),"\n")
 cat("Acceptrate: ", MCMC_Single_Run$Accpetance,"\n")
-cat("Mean Cluster Size: ", MCMC_Single_Run$MeanClusterSize)
+cat("Mean Cluster Size: ", MCMC_Single_Run$MeanClusterSize, "\n")
+# print(MCMC_Single_Run$X)
+# print(vol**(1/d)/2)
 # --------------------------------------------------------------------------------
 rm(d, particleDensity, vol, beta, t, nPart, l, X0, q, start_time, end_time, t2)
 # --------------------------------------------------------------------------------
@@ -50,21 +52,23 @@ rm(d, particleDensity, vol, beta, t, nPart, l, X0, q, start_time, end_time, t2)
 
 ```{r evaluation_acf}
 E <- cumsum(MCMC_Single_Run$dE)
-x.ticks <- c(9e6: nIt)
+# print(MCMC_Single_Run$dE)
+x.ticks <- c(1e5:nIt)
 plot(x=x.ticks,y=E[x.ticks],type='l',log='')
 # plot(x=x.ticks,y=E[x.ticks]+abs(min(E[x.ticks]))+1,type='l',log='y')
 rm(x.ticks)
+
 ```
 
 ```{r}
-acf_range <- c((nIt-4e5):nIt)
+acf_range <- c((nIt-3e5):nIt)
 start_time <- Sys.time()
-acf(E[acf_range], lag.max = 25000)
+acf(E[acf_range], lag.max = 50000)
 cat("ACF runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
 ```
 
 ```{r}
-acf_range <- c((nIt-1e6):nIt)
+acf_range <- c((nIt-3e5):nIt)
 start_time <- Sys.time()
 cat("IAT_custom: ",IAT_CPP(E[acf_range]),"\n")
 cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
@@ -287,8 +291,13 @@ rm(betaVals)
 
 myPlotData(plt.data)
 
+# x.b <- exp(log(10)*seq(from=-4, to=5, length.out=45))
+# x.b <- x.b[which(x.b>0.5e0)]
+# y.q <- 2 + 4 * x.b
+# lines(x.b, y.q)
+
 rm(resFrame)
-rm(x.beta, plt.data, d, particleDensity, vol, file_name)
+rm(plt.data, d, particleDensity, vol, file_name)
 ```
 ```{r plot_parallel_rho_for_q}
 # --------------------------------------------------------------------------------

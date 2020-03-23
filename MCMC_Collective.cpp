@@ -129,9 +129,10 @@ Rcpp::List MCMC_CPP_Collective(int nIt, int nPart, double vol, double t, double 
   int d = X0(1,Rcpp::_).size();
   const double l = std::pow(vol, 1./d);
   const double t0= t;
+  const double p_bond = 0.5;
   
-  const double T_burnIn_1 = 2e6;
-  const double T_burnIn_2 = 2e6;
+  const double T_burnIn_1 = 1e5;
+  const double T_burnIn_2 = 1e5;
   const double min_dist = 2;
   // ----------------------- Observables
   NumericVector dE(nIt, 0.0);
@@ -153,9 +154,11 @@ Rcpp::List MCMC_CPP_Collective(int nIt, int nPart, double vol, double t, double 
   double accept_rate = 0;
   int k  = -1;
   for (int n = 1; n < nIt; n++) {
+    // ---------------------------------------------------------------------------
     // Sample bonds to create a cluster
     k = std::floor(R::runif(0,nPart));
     int nFree = nPart-1;
+    //Rcout << "Markov Chain step: " << n << ", seedparticle: " << k << std::endl;
     
     std::vector<int> bonded_particles;
     bonded_particles.push_back(k);
@@ -168,7 +171,7 @@ Rcpp::List MCMC_CPP_Collective(int nIt, int nPart, double vol, double t, double 
       for(int j = 0; j < nFree; j++){
         int free_id = getFreeIndex(id, j+1);
         if(getDist(X[bonded_particles[i]], X[free_id], l) < min_dist){
-          if(R::runif(0,1) < 1-std::exp(-1./t)){
+          if(R::runif(0,1) < p_bond){
             bonded_particles.push_back(free_id);
             id[free_id] = 0;
             nFree--;
@@ -181,6 +184,7 @@ Rcpp::List MCMC_CPP_Collective(int nIt, int nPart, double vol, double t, double 
       }
     }
     
+    // Determine how many failed outgoing bonds exist
     int n_out_bef = 0;
     for(unsigned int i = 0; i < failed_bonds.size(); i++){
       for(unsigned int j = 0; j < bonded_particles.size(); j++){
@@ -188,7 +192,8 @@ Rcpp::List MCMC_CPP_Collective(int nIt, int nPart, double vol, double t, double 
         n_out_bef++;
       }
     }
-      
+    
+    // Save the set of particles not assigned to the cluster for easier access
     for(int u = 0; u < nPart; u++){
       for(unsigned int j = 0; j < bonded_particles.size(); j++){
         if(u == bonded_particles[j]) continue;
@@ -196,32 +201,23 @@ Rcpp::List MCMC_CPP_Collective(int nIt, int nPart, double vol, double t, double 
       } 
     }
     
-    
-    
     // ---------------------------------------------------------------------------
-    for(unsigned int i=0; i < bonded_particles.size(); i++){
+    // Calculate the necessary energy terms before shifting 
+    for  (unsigned int i = 0; i < bonded_particles.size()    ; i++){
       for(unsigned int j = 0; j < not_bonded_particles.size(); j++){
+        const int a = bonded_particles[i];
+        const int b = not_bonded_particles[j];
         double sum = 0;
         for(int dim = 0; dim < d; dim++){
-          sum += (X[bonded_particles[i]][dim] - X[not_bonded_particles[j]][dim])*(X[bonded_particles[i]][dim] - X[not_bonded_particles[j]][dim]);
+          sum += (X[a][dim] - X[b][dim])*(X[a][dim] - X[b][dim]);
         }
         
-        dE[n] -= q[bonded_particles[i]] * q[not_bonded_particles[j]] / sqrt(sum) + 1/ pow(sum, 4);  
+        dE[n] -= q[a] * q[b] / sqrt(sum) + 1/ pow(sum, 4);  
       }
     }
     
-    // for(int j = 0; j < nPart; j++){
-    //   if(j == k) continue;
-    //   
-    //   double sum = 0;
-    //   for(int dim = 0; dim < d; dim++){
-    //     sum += (X[k][dim] - X[j][dim])*(X[k][dim] - X[j][dim]);
-    //   }
-    //   
-    //   dE[n] -= q[k] * q[j] / sqrt(sum) + 1/ pow(sum, 4);
-    // }
     // ---------------------------------------------------------------------------
-    // Make new candidates (Save old coordinates in case of rejection)
+    // Make new candidate by shifting (Save old coordinates in case of rejection)
     std::vector<std::vector<double>> old_vals;
     std::vector<double> old_x(d,0);
     for(unsigned int w = 0; w < bonded_particles.size(); w++){
@@ -232,7 +228,7 @@ Rcpp::List MCMC_CPP_Collective(int nIt, int nPart, double vol, double t, double 
     
     // Make shift vector
     std::vector<double> shift_vec(d,0);
-    if (d == 1) {
+    if        (d == 1) {
       const double r   = R::rnorm(0, sigma);
       shift_vec = {r};
     } else if (d == 2) {
@@ -248,45 +244,34 @@ Rcpp::List MCMC_CPP_Collective(int nIt, int nPart, double vol, double t, double 
     
     // Apply shift vector to all cluster particles
     for(unsigned int p = 0; p < bonded_particles.size(); p++){
+      const int a = bonded_particles[p];
       for(int i=0; i < d; i++){
-        X[bonded_particles[p]][i] += shift_vec[i]; 
+        X[a][i] += shift_vec[i]; 
         // Periodic boundary wrap
-        if      (X[bonded_particles[p]][i] < -l/2) X[bonded_particles[p]][i] += l;
-        else if (X[bonded_particles[p]][i] > +l/2) X[bonded_particles[p]][i] -= l;
+        if      (X[a][i] < -l/2) X[a][i] += l;
+        else if (X[a][i] > +l/2) X[a][i] -= l;
       }  
     }
     
-    // for(int i=0; i < d; i++){
-    //   X[k][i] += shift_vec[i]; 
-    //   // Periodic boundary wrap
-    //   if      (X[k][i] < -l/2) X[k][i] += l;
-    //   else if (X[k][i] > +l/2) X[k][i] -= l;
-    // }
     // ---------------------------------------------------------------------------
-    for(unsigned int i=0; i < bonded_particles.size(); i++){
+    // Calculate the necessary energy terms after shifting 
+    for(  unsigned int i = 0; i < bonded_particles.size()    ; i++){
       for(unsigned int j = 0; j < not_bonded_particles.size(); j++){
         double sum = 0;
+        const int a = bonded_particles[i];
+        const int b = not_bonded_particles[j];
         for(int dim = 0; dim < d; dim++){
-          sum += (X[bonded_particles[i]][dim] - X[not_bonded_particles[j]][dim])*(X[bonded_particles[i]][dim] - X[not_bonded_particles[j]][dim]);
+          sum += (X[a][dim] - X[b][dim])*(X[a][dim] - X[b][dim]);
         }
         
-        dE[n] += q[bonded_particles[i]] * q[not_bonded_particles[j]] / sqrt(sum) + 1/ pow(sum, 4);  
+        dE[n] += q[a] * q[b] / sqrt(sum) + 1/ pow(sum, 4);  
       }
     }
     
-    // for(int j = 0; j < nPart; j++){
-    //   if(j == k) continue;
-    //   
-    //   double sum = 0;
-    //   for(int l = 0; l < d; l++){
-    //     sum += (X[k][l] - X[j][l])*(X[k][l] - X[j][l]);
-    //   }
-    //   
-    //   dE[n] += q[k] * q[j] / sqrt(sum) + 1/ pow(sum, 4);
-    // }
     // ---------------------------------------------------------------------------
+    // Determine outgoing failed bonds after shift
     int n_out_aft = 0;
-    for(unsigned int i=0; i < bonded_particles.size(); i++){
+    for(  unsigned int i = 0; i < bonded_particles.size()    ; i++){
       for(unsigned int j = 0; j < not_bonded_particles.size(); j++){
        if(getDist(X[bonded_particles[i]], X[not_bonded_particles[j]], l) < min_dist){
          n_out_aft++;
@@ -294,21 +279,27 @@ Rcpp::List MCMC_CPP_Collective(int nIt, int nPart, double vol, double t, double 
       }
     }
     
+    //if (bonded_particles.size() > 2) {
+    //  Rcout << n << ": Determined cluster " << bonded_particles.size() << ", " << n_out_bef << ", " << n_out_aft << std::endl;
+    //}
+    
     // ---------------------------------------------------------------------------
+    // To accelerate the burn-in, while in the first T_burnIn_1 steps the temperature is reduced from 10^2 to t0 exponentially
     if (n < T_burnIn_1) {
       t = std::exp(std::log(10) * (+2. + (double)n / T_burnIn_1 * (std::log10(t0)-2.)));
     } else {
       t = t0;
     }
-    //if (n == T_burnIn_1-2) Rcout << "Temperature: " << t << ", t0:" << t0 << std::endl;
-    if (R::runif(0,1) < std::exp(-1./t * dE[n])*pow(( 1-std::exp(-1./t)), (n_out_bef-n_out_aft))) {
-      //X = Y;
+    
+    // Accept-Reject step of new candidate
+    if (R::runif(0,1) < std::exp(-1./t * dE[n])*pow(1-p_bond, (n_out_aft - n_out_bef))) {
+    // if (R::runif(0,1) < std::exp(-1./t * dE[n])) {
       if (n > T_burnIn_2) accept_rate += 1;
     } else {
       dE[n] = 0;
       for(unsigned int w = 0; w < bonded_particles.size(); w++){
-        for (int i = 0; i < d; i++) X[bonded_particles[w]][i] = old_x[i];
-        old_vals.push_back(old_x);
+        const int a = bonded_particles[w];
+        for (int i = 0; i < d; i++) X[a][i] = old_vals[w][i];
       }
     }
     // ---------------------------------------------------------------------------
@@ -318,7 +309,6 @@ Rcpp::List MCMC_CPP_Collective(int nIt, int nPart, double vol, double t, double 
     }
     // ---------------------------------------------------------------------------
   }
-  //Rcout << "Acceptance: " << accept_rate/nIt*100. << "%" << std::endl;
   
   
   for (int i = 0; i < nPart; i++) {
