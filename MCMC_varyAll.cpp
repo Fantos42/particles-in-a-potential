@@ -7,7 +7,7 @@ using namespace Rcpp;
 // =======================================================
 // ========================================= IAP_CPP
 // =======================================================
-// [[Rcpp::export]]
+
 double IAT_CPP(NumericVector x){
   const int n = x.size(); //number of particles
   std::vector<double> X (n, 0);
@@ -62,7 +62,7 @@ double IAT_CPP(NumericVector x){
 // =======================================================
 // ========================================= Calculate Energy
 // =======================================================
-// [[Rcpp::export]]
+
 double E_CPP(NumericMatrix x, NumericVector q){
   int n = q.size(); //number of particles
   int d = x.ncol(); //dimensions
@@ -75,6 +75,25 @@ double E_CPP(NumericMatrix x, NumericVector q){
       sum = 0;
       for(int k = 0; k < d; k++){
         sum += (x(i,k) - x(j,k))*(x(i,k) - x(j,k));
+      }
+      a += q[i] * q[j] / sqrt(sum);
+      b += 1 / pow(sum, 4); 
+    }
+  }
+  return (a+b);
+}
+double E_CPP(std::vector<std::vector<double>> x, NumericVector q){
+  int n = q.size(); //number of particles
+  int d = x[0].size(); //dimensions
+  
+  double a = 0;
+  double b = 0;
+  double sum = 0;
+  for(int i = 0; i < n-1; i++){
+    for(int j = i+1; j < n; j++){
+      sum = 0;
+      for(int k = 0; k < d; k++){
+        sum += (x[i][k] - x[j][k])*(x[i][k] - x[j][k]);
       }
       a += q[i] * q[j] / sqrt(sum);
       b += 1 / pow(sum, 4); 
@@ -176,79 +195,19 @@ double estimate_clstSize(std::vector<std::vector<double>> X) {
 }
 
 // =======================================================
-// ========================================= other_observables
-// =======================================================
-
-std::vector<double> estimate_particle_dists(std::vector<std::vector<double>> X){
-  const unsigned int nPart = X.size();
-  const unsigned int d = X[0].size();
-  // double dist = 0;
-  // const double normalization = 2/nPart/(nPart-1);
-  std::vector<double> particle_dist_vec;
-  
-  for(unsigned int i = 0; i < nPart; i++){
-    for(unsigned int j = i+1; j < nPart; j++){
-      double sum = 0;
-      for(unsigned int dim = 0; dim < d; dim++){
-        sum += (X[i][dim] - X[j][dim])*(X[i][dim] - X[j][dim]);
-      }
-      // dist += sqrt(sum);
-      particle_dist_vec.push_back(sqrt(sum));
-    }
-  }
-  
-  return(particle_dist_vec);
-}
-
-std::vector<double> estimate_nearest_neighbour_dists(std::vector<std::vector<double>> X){
-  const unsigned int nPart = X.size();
-  double min_dist = 1e7;
-  // double sum_min_dists = 0;
-  std::vector<double> min_dist_vec;
-  
-  for(unsigned int i = 0; i < nPart; i++){
-    for(unsigned int j = 0; j < nPart; j++){
-      if(i == j) continue;
-      if(getDist(X[i], X[j]) < min_dist) min_dist = getDist(X[i], X[j]);
-    }
-    min_dist_vec.push_back(min_dist);
-    // sum_min_dists += min_dist;
-  }
-  
-  return(min_dist_vec);
-}
-
-std::vector<double> estimate_Nparticles_neighbourhood(std::vector<std::vector<double>> X){
-  const unsigned int nPart = X.size();
-  const double min_dist = 2;
-  std::vector<double> N_neigh; 
-  
-  for(unsigned int i = 0; i < nPart; i++){
-    unsigned int neigh = 0;
-    for(unsigned int j = 0; j < nPart; j++){
-      if(i == j) continue;
-      if(getDist(X[i], X[j]) < min_dist) neigh++; 
-    }
-    N_neigh.push_back(neigh);
-  }
-  
-  return(N_neigh);
-}
-
-// =======================================================
 // ========================================= MCMC_CPP
 // =======================================================
 // [[Rcpp::export]]
-Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, NumericMatrix X0, NumericVector q){
+Rcpp::List MCMC_CPP_varyAll(int nIt, int nPart, double vol, double t, double sigma, NumericMatrix X0, NumericVector q){
   int d = X0(1,Rcpp::_).size();
   const double l = std::pow(vol, 1./d);
   const double t0= t;
   
-  const double T_burnIn_1 = 0;
-  const double T_burnIn_2 = 0;
+  const double T_burnIn_1 = 1e5;
+  const double T_burnIn_2 = 1e5;
   // ----------------------- Observables
-  NumericVector dE(nIt, 0.0);
-  dE[0] = E_CPP(X0, q);
+  NumericVector E(nIt, 0.0);
+  E[0] = E_CPP(X0, q);
   
   const int N_clstSize_samples = 10;
   int k_clstSize               = 0;
@@ -264,69 +223,48 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, Nume
     }
   }
   double accept_rate = 0;
-  int k  = -1;
   for (int n = 1; n < nIt; n++) {
-    k = std::floor(R::runif(0,nPart));
-    // ---------------------------------------------------------------------------
-    for(int j = 0; j < nPart; j++){
-      if(j == k) continue;
-      
-      double sum = 0;
-      for(int dim = 0; dim < d; dim++){
-        sum += (X[k][dim] - X[j][dim])*(X[k][dim] - X[j][dim]);
-      }
-      
-      dE[n] -= q[k] * q[j] / sqrt(sum) + 1/ pow(sum, 4);
-    }
     // ---------------------------------------------------------------------------
     // Make new candidates (Save old coordinates in case of rejection)
-    std::vector<double> old_x(d,0);
-    for (int i = 0; i < d; i++) old_x[i] = X[k][i];
+    std::vector<std::vector<double>> old_x = X;
     
-    std::vector<double> shift_vec(d,0);
-    if (d == 1) {
-      const double r   = R::rnorm(0, sigma);
-      shift_vec = {r};
-    } else if (d == 2) {
-      const double r   = R::rnorm(0, sigma);
-      const double phi = R::runif(0, 1);
-      shift_vec = {cos(phi*M_PI)*r, sin(phi*M_PI)*r};
-    } else if (d == 3) {
-      const double r   = R::rnorm(0, sigma);
-      const double phi = R::runif(0, 1);
-      const double theta=R::runif(0, 1);
-      shift_vec = {cos(phi*M_PI)*sin(theta*M_PI)*r, sin(phi*M_PI)*sin(theta*M_PI)*r, cos(theta*M_PI)*r};
-    }
-    for(int i=0; i < d; i++){
-      X[k][i] += shift_vec[i]; 
-      // Periodic boundary wrap
-      if      (X[k][i] < -l/2) X[k][i] += l;
-      else if (X[k][i] > +l/2) X[k][i] -= l;
+    for (int j = 0; j < nPart; j++) {
+      std::vector<double> shift_vec(d,0);
+      if (d == 1) {
+        const double r   = R::rnorm(0, sigma);
+        shift_vec = {r};
+      } else if (d == 2) {
+        const double r   = R::rnorm(0, sigma);
+        const double phi = R::runif(0, 1);
+        shift_vec = {cos(phi*M_PI)*r, sin(phi*M_PI)*r};
+      } else if (d == 3) {
+        const double r   = R::rnorm(0, sigma);
+        const double phi = R::runif(0, 1);
+        const double theta=R::runif(0, 1);
+        shift_vec = {cos(phi*M_PI)*sin(theta*M_PI)*r, sin(phi*M_PI)*sin(theta*M_PI)*r, cos(theta*M_PI)*r};
+      }
+      for(int i=0; i < d; i++){
+        X[j][i] += shift_vec[i]; 
+        // Periodic boundary wrap
+        if      (X[j][i] < -l/2) X[j][i] += l;
+        else if (X[j][i] > +l/2) X[j][i] -= l;
+      }
     }
     // ---------------------------------------------------------------------------
-    for(int j = 0; j < nPart; j++){
-      if(j == k) continue;
-      
-      double sum = 0;
-      for(int l = 0; l < d; l++){
-        sum += (X[k][l] - X[j][l])*(X[k][l] - X[j][l]);
-      }
-      
-      dE[n] += q[k] * q[j] / sqrt(sum) + 1/ pow(sum, 4);
-    }
+    E[n] += E_CPP(X, q);
     // ---------------------------------------------------------------------------
     if (n < T_burnIn_1) {
       t = std::exp(std::log(10) * (+2. + (double)n / T_burnIn_1 * (std::log10(t0)-2.)));
     } else {
       t = t0;
     }
-    //if (n == T_burnIn_1-2) Rcout << "Temperature: " << t << ", t0:" << t0 << std::endl;
-    if (R::runif(0,1) < std::exp(-1./t * dE[n])) {
+    
+    if (R::runif(0,1) < std::exp(-1./t * (E[n]-E[n-1]))) {
+      //X = Y;
       if (n > T_burnIn_2) accept_rate += 1;
-      dE[n] = dE[n-1] + dE[n];
     } else {
-      for (int i = 0; i < d; i++) X[k][i] = old_x[i];
-      dE[n] = dE[n-1];
+      E[n] = E[n-1];
+      X = old_x;
     }
     // ---------------------------------------------------------------------------
     if ((n-n_min_clstSize) >= k_clstSize * stp_clstSize) {
@@ -351,24 +289,7 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, Nume
   }
   mean_size = mean_size/clstSize.size();
   
-  //Estimate distances between particles of final config
-  std::vector<double> particle_dists = estimate_particle_dists(X);
-  
-  //Estimate nearest neighbour distance of each particle of final config
-  std::vector<double> nearest_neigh_dists = estimate_nearest_neighbour_dists(X);
-  
-  //Estimate number of particles in direct neighbourhood of final config
-  std::vector<double> N_particles_neighbourhood = estimate_Nparticles_neighbourhood(X);
-  
-  Rcpp::List rList = Rcpp::List::create(
-    Named("E")          = dE, 
-    Named("X")          = X0, 
-    Named("Accpetance") = accept_rate/(nIt-T_burnIn_2), 
-    Named("q")          = mean_size, 
-    Named("lambda")     = particle_dists, 
-    Named("omega")      = nearest_neigh_dists, 
-    Named("kappa")      = N_particles_neighbourhood
-    );
+  Rcpp::List rList = Rcpp::List::create(Named("dE")=E, Named("X")=X0, Named("Accpetance")=accept_rate/(nIt-T_burnIn_2), Named("MeanClusterSize")=mean_size);
   return rList;
 }
 

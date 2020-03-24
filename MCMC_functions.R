@@ -83,6 +83,7 @@ show_particles <- function(x, q, V){
 print("Load MCMC_functions.cpp.\n")
 
 sourceCpp("MCMC_functions.cpp")
-sourceCpp("MCMC_Collective.cpp")
+# sourceCpp("MCMC_Collective.cpp")
+# sourceCpp("MCMC_varyAll.cpp")
 
 print("Loaded MCMC_functions.R.\n")
