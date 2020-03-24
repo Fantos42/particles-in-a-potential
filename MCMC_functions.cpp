@@ -176,6 +176,66 @@ double estimate_clstSize(std::vector<std::vector<double>> X) {
 }
 
 // =======================================================
+// ========================================= other_observables
+// =======================================================
+
+std::vector<double> estimate_particle_dists(std::vector<std::vector<double>> X){
+  const unsigned int nPart = X.size();
+  const unsigned int d = X[0].size();
+  // double dist = 0;
+  // const double normalization = 2/nPart/(nPart-1);
+  std::vector<double> particle_dist_vec;
+  
+  for(unsigned int i = 0; i < nPart; i++){
+    for(unsigned int j = i+1; j < nPart; j++){
+      double sum = 0;
+      for(unsigned int dim = 0; dim < d; dim++){
+        sum += (X[i][dim] - X[j][dim])*(X[i][dim] - X[j][dim]);
+      }
+      // dist += sqrt(sum);
+      particle_dist_vec.push_back(sqrt(sum));
+    }
+  }
+  
+  return(particle_dist_vec);
+}
+
+std::vector<double> estimate_nearest_neighbour_dists(std::vector<std::vector<double>> X){
+  const unsigned int nPart = X.size();
+  double min_dist = 1e7;
+  // double sum_min_dists = 0;
+  std::vector<double> min_dist_vec;
+  
+  for(unsigned int i = 0; i < nPart; i++){
+    for(unsigned int j = 0; j < nPart; j++){
+      if(i == j) continue;
+      if(getDist(X[i], X[j]) < min_dist) min_dist = getDist(X[i], X[j]);
+    }
+    min_dist_vec.push_back(min_dist);
+    // sum_min_dists += min_dist;
+  }
+  
+  return(min_dist_vec);
+}
+
+std::vector<double> estimate_Nparticles_neighbourhood(std::vector<std::vector<double>> X){
+  const unsigned int nPart = X.size();
+  const double min_dist = 2;
+  std::vector<double> N_neigh; 
+  
+  for(unsigned int i = 0; i < nPart; i++){
+    unsigned int neigh = 0;
+    for(unsigned int j = 0; j < nPart; j++){
+      if(i == j) continue;
+      if(getDist(X[i], X[j]) < min_dist) neigh++; 
+    }
+    N_neigh.push_back(neigh);
+  }
+  
+  return(N_neigh);
+}
+
+// =======================================================
 // ========================================= MCMC_CPP
 // =======================================================
 // [[Rcpp::export]]
@@ -291,7 +351,24 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, Nume
   }
   mean_size = mean_size/clstSize.size();
   
-  Rcpp::List rList = Rcpp::List::create(Named("dE")=dE, Named("X")=X0, Named("Accpetance")=accept_rate/(nIt-T_burnIn_2), Named("MeanClusterSize")=mean_size);
+  //Estimate distances between particles of final config
+  std::vector<double> particle_dists = estimate_particle_dists(X);
+  
+  //Estimate nearest neighbour distance of each particle of final config
+  std::vector<double> nearest_neigh_dists = estimate_nearest_neighbour_dists(X);
+  
+  //Estimate number of particles in direct neighbourhood of final config
+  std::vector<double> N_particles_neighbourhood = estimate_Nparticles_neighbourhood(X);
+  
+  Rcpp::List rList = Rcpp::List::create(
+    Named("dE")=dE, 
+    Named("X")=X0, 
+    Named("Accpetance")=accept_rate/(nIt-T_burnIn_2), 
+    Named("MeanClusterSize")=mean_size, 
+    Named("ParticleDists")=particle_dists, 
+    Named("NearestNeighDists")=nearest_neigh_dists, 
+    Named("NParticlesNeighbourhood")=N_particles_neighbourhood
+    );
   return rList;
 }
 
@@ -299,3 +376,20 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, Nume
 /*** R
 print("Loaded MCMC_functions.cpp.")
 */
+// 
+// ```{r results_other_observables}
+// mean_particle_dist <- mean(MCMC_Single_Run$ParticleDists)
+//   error_mean_particle_dist <- getBootstrapMeanError(MCMC_Single_Run$ParticleDists)
+//   
+//   mean_nearest_neigh_dist <- mean(MCMC_Single_Run$NearestNeighDists)
+//   error_mean_nearest_neigh_dist <- getBootstrapMeanError(MCMC_Single_Run$NearestNeighDists)
+//   
+//   mean_number_particles_direct_neigh <- mean(MCMC_Single_Run$NParticlesNeighbourhood)
+//   error_mean_number_particles_direct_neigh <- getBootstrapMeanError(MCMC_Single_Run$NParticlesNeighbourhood)
+//   ```
+// ```{r}
+// cat("Average Distance between all particles: ", mean_particle_dist, "+-" , error_mean_particle_dist, "\n")
+//   cat("Average Distance to nearest Neighbour: ", mean_nearest_neigh_dist, "+-" , error_mean_nearest_neigh_dist, "\n")
+//   cat("Average Number of Particles in direct Neighbourhood: ", mean_number_particles_direct_neigh, "+-" , error_mean_number_particles_direct_neigh, "\n")
+//   
+//   ```
