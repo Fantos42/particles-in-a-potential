@@ -98,15 +98,15 @@ cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds 
 ```
 
 ```{r}
-# myCreateNewFrame("MCMC_Results_V5.RData")
+myCreateNewFrame("MCMC_Results_V6.RData")
 
-myShowContentOverview("MCMC_Results_V5.RData")
+myShowContentOverview("MCMC_Results_V6.RData")
 ```
 
 ```{r MCMC_Swipe}
 # --------------------------------------------------------------------------------
 # LOAD RESULTS DATA FRAME FROM DISK
-file_name <- "MCMC_Results_V5.RData"
+file_name <- "MCMC_Results_V6.RData"
 load(file_name)
 run_no <- max(resFrame$RUN_ID, na.rm=TRUE)+1
 # --------------------------------------------------------------------------------
@@ -116,10 +116,12 @@ nPart           <- 50
 rho             <- 0.02
 
 nIt             <- 0.5e6
-nResamples      <- 5
+nResamples      <- 2
 # --------------------------------------------------------------------------------
 # Betas To Calculate
 x.beta <- exp(log(10)*seq(from=-7, to=7, length.out=71))
+
+x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
 x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
 x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
 x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
@@ -139,7 +141,7 @@ rm(file_name, run_no, dim, nPart, rho, nIt, nResamples, x.beta)
 
 ```{r plot_orderParam}
 source("DataFrameHelper.R")
-file_name <- "MCMC_Results_V5.RData"
+file_name <- "MCMC_Results_V6.RData"
 load(file_name)
 # --------------------------------------------------------------------------------
 dim             <- 2   
@@ -155,9 +157,9 @@ plt.data <- myGetObservables(dim=dim, vol=vol, rho=rho, beta=x.beta)
 rm(x.beta)
 
 myPlotData(1/plt.data$x, plt.data$y.q     , plt.data$y.q_Err     )
-myPlotData(1/plt.data$x, plt.data$y.lambda, plt.data$y.lambda_Err)
-myPlotData(1/plt.data$x, plt.data$y.omega , plt.data$y.omega_Err )
-myPlotData(1/plt.data$x, plt.data$y.kappa , plt.data$y.kappa_Err )
+# myPlotData(1/plt.data$x, plt.data$y.lambda, plt.data$y.lambda_Err)
+# myPlotData(1/plt.data$x, plt.data$y.omega , plt.data$y.omega_Err )
+# myPlotData(1/plt.data$x, plt.data$y.kappa , plt.data$y.kappa_Err )
 
 rm(resFrame)
 rm(plt.data, dim, rho, vol, file_name)
@@ -264,10 +266,10 @@ rm(x.beta, y.iat, i, d, particleDensity, vol, nPart, l, idx, file_name)
 plot(NA, NA, xlim=c(7e-6, 1e6), ylim = c(5e1, 1e5), type = "l", log="xy") 
 x.ticks <- exp(log(10)*seq(from=-7, to=7, length.out=71))
 
-# x.ticks <- x.ticks[which(c(1:length(x.ticks))%%2==0)]
-# x.ticks <- x.ticks[which(c(1:length(x.ticks))%%2==1)]
+x.ticks <- x.ticks[which(c(1:length(x.ticks))%%2==0)]
+x.ticks <- x.ticks[which(c(1:length(x.ticks))%%2==0)]
 
-print(x.ticks)
+# print(x.ticks)
 abline(v=x.ticks, col="gray")
 ```
 

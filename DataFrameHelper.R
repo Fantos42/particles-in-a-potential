@@ -201,34 +201,35 @@ myMCMCSwipe <- function(dim, nPart=0, rho=0, vol=0, sigma=1, nIt=5e5, nResamples
       q  <- sample(c(-1,+1), size=nPart, replace=TRUE)
       
       # --------------- Positioned on a regular lattice
-      X0 <- array(data = NA, dim = c(nPart, d))
-      nRow  <- ceiling(nPart**(1./d))
-      nCol  <- round  (nPart**(1./d))
-      
+      X0 <- array(data = NA, dim = c(nPart, dim))
+      nRow  <- ceiling(nPart**(1./dim))
+      nCol  <- round  (nPart**(1./dim))
+
       rx <- vol**(1/2) / nRow / 2
       rx <- 1.5
       ry <- vol**(1/2) / nCol / 2
       ry <- 1.5
       offset <- vol**(1/2) * (1/2 - 1/2/nCol) - vol**(1/2) / 4
-      
-      for (i in c(1:nPart)) {
-        X0[i,1] <- (floor((i-1) / nCol)) * rx - offset
-        X0[i,2] <- ((i-1) %% nCol      ) * ry - offset
+
+      for (iterator in c(1:nPart)) {
+        X0[iterator,1] <- (floor((iterator-1) / nCol)) * rx - offset
+        X0[iterator,2] <- ((iterator-1) %% nCol      ) * ry - offset
       }
       q <- rep(1, nPart)
-      for (j in c(2:nPart)) {
-        q[j] <- q[j-1]*-1
+      for (iterator in c(2:nPart)) {
+        q[iterator] <- q[iterator-1]*-1
       }
       rm(rx,ry,offset)
       
       
       res <- MCMC_CPP(nIt, nPart, vol, 1/x.beta[i], sigma, X0, q) # Make Markov Chain
       
+      
       # Calculate ovbservables
       # iat <- IAT_CPP(res$E[c(1e5:nIt)])
       iat <- 0
-      
-      # - - - - - - - - - SAVE RESULT TO FRAME
+
+            # - - - - - - - - - SAVE RESULT TO FRAME
       df <- rbind(
         df, 
         list(
