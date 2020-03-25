@@ -18,14 +18,14 @@ print("Init complete.")
 # HYPERPARAMETERS:
 dim             <- 2    # Number of dimensions
 nPart           <- 50
-particleDensity <- 0.05
-beta            <- 5e1
+rho             <- 0.1
+beta            <- 1e3
 
-nIt             <- 0.5e6  # Number of iterations
+nIt             <- 0.2e6  # Number of iterations
 # nIt             <- 1
 
 t     <- 1/beta # Temperature of heat bath
-vol   <- nPart / particleDensity
+vol   <- nPart / rho
 l     <- vol**(1/dim)
 # --------------------------------------------------------------------------------
 # Start configuration: (type="ordered" or type="random")
@@ -42,7 +42,7 @@ start_time <- Sys.time()
 MCMC_Single_Run <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, X0, q)
 end_time <- Sys.time()
 # --------------------------------------------------------------------------------
-# pdf("particle_config_out.pdf")
+# pdf("config_rho010_t0001.pdf")
 show_particles(MCMC_Single_Run$X, q, vol)
 # dev.off()
 # --------------------------------------------------------------------------------
@@ -56,7 +56,7 @@ cat("Kappa: ", mean(MCMC_Single_Run$kappa), "\n")
 # print(MCMC_Single_Run$X)
 # print(vol**(1/dim)/2)
 # --------------------------------------------------------------------------------
-rm(dim, particleDensity, vol, beta, t, nPart, l, X0, q, start_time, end_time, t2, type, nIt)
+rm(dim, rho, vol, beta, t, nPart, l, X0, q, start_time, end_time, t2, type, nIt)
 # --------------------------------------------------------------------------------
 ```
 

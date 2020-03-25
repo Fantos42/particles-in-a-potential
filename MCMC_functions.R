@@ -1,6 +1,8 @@
 library(Rcpp)
 library(rgl)           # 3D Plotting
 library(tidyverse)     # Remove duplicate elements
+library(ggplot2)
+library(ggforce)
 
 setwd(dirname(parent.frame(2)$ofile))
 
@@ -13,7 +15,10 @@ show_particles <- function(x, q, V){
   posParticles <- x[ipos,]
   negParticles <- x[ineg,]
   
-  # pdf("test.pdf")
+  colours <- numeric(length(q))
+  colours[which(q==+1)] <- "red"
+  colours[which(q==-1)] <- "blue"
+  
   if (dim == 1) {
     yLength <- 0.5
     plot(NA, xlim=c(-l/2, l/2), ylim=c(-1.5,1.5), xlab='x', ylab='', yaxt='n')
@@ -43,31 +48,38 @@ show_particles <- function(x, q, V){
              length=0.02, angle=90, code=0, col='blue')
     }    
   } else if (dim == 2) {
-    par(pty="s")
-    plot(NA, xlim=c(-l/2, l/2), ylim=c(-l/2,l/2), xlab='x-axis', ylab='y-axis', asp=1)
+    df_pos <- data.frame("x"=x[ipos,1],"y"=x[ipos,2])
+    df_neg <- data.frame("x"=x[ineg,1],"y"=x[ineg,2])
     
-    arrows(x0=posParticles[,1]-0.5,
-           y0=posParticles[,2],
-           x1=posParticles[,1]+0.5,
-           y1=posParticles[,2],
-           length=0.01, angle=90, code=0, col='red')
-    arrows(x0=posParticles[,1],
-           y0=posParticles[,2]-0.5,
-           x1=posParticles[,1],
-           y1=posParticles[,2]+0.5,
-           length=0.01, angle=90, code=0, col='red')
-    arrows(x0=negParticles[,1]-0.5,
-           y0=negParticles[,2],
-           x1=negParticles[,1]+0.5,
-           y1=negParticles[,2],
-           length=0.01, angle=90, code=0, col='blue')
-    arrows(x0=negParticles[,1],
-           y0=negParticles[,2]-0.5,
-           x1=negParticles[,1],
-           y1=negParticles[,2]+0.5,
-           length=0.01, angle=90, code=0, col='blue')
+    gg <- ggplot() 
+    gg <- gg + geom_circle(
+      data = df_pos,
+      mapping = aes(x0 = x,  y0 = y, r = 0.5),
+      fill = "red")
+    gg <- gg + geom_circle(
+      data = df_neg,
+      mapping = aes(x0 = x,  y0 = y, r = 0.5),
+      fill = "blue")
     
-    lines(c(-l/2,-l/2,l/2,l/2,-l/2),c(-l/2,l/2,l/2,-l/2,-l/2))
+    
+    gg <- gg + xlim(c(-l/2, +l/2)*1.05) + ylim(c(-l/2, +l/2)*1.05)
+    gg <- gg + coord_fixed()
+    gg <- gg + theme_bw()
+    
+    gg <- gg + geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2), size=0.5, data=data.frame(x1=-l/2,x2=+l/2,y1=-l/2,y2=-l/2))
+    gg <- gg + geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2), size=0.5, data=data.frame(x1=-l/2,x2=+l/2,y1=+l/2,y2=+l/2))
+    gg <- gg + geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2), size=0.5, data=data.frame(x1=-l/2,x2=-l/2,y1=-l/2,y2=+l/2))
+    gg <- gg + geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2), size=0.5, data=data.frame(x1=+l/2,x2=+l/2,y1=-l/2,y2=+l/2))
+    
+    # gg <- labs(
+      # subtitle="Area Vs Population", 
+      # y="Population", 
+      # x="Area", 
+      # title="Scatterplot", 
+      # caption = "Source: midwest")
+    
+    plot(gg)
+    
   } else if (dim == 3) {
     ballradius <- 0.5
     open3d()
@@ -77,7 +89,6 @@ show_particles <- function(x, q, V){
     spheres3d(x=negParticles[,1], y=negParticles[,2], z=negParticles[,3], col = "blue",
               radius=ballradius)
   }
-  # dev.off()
 }
 
 gen_initConfig <- function(type="random", dim, vol, nPart, lc=1.5) {
