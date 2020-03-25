@@ -80,6 +80,44 @@ show_particles <- function(x, q, V){
   # dev.off()
 }
 
+gen_initConfig <- function(type="random", dim, vol, nPart, lc=1.5) {
+  if (type!="random" && type!="ordered") {
+    cat ("Invalid start configuration type: ",type,"! Setting to random.\n")
+    type <- "random"
+  }
+  
+  X0 <- numeric(0)
+  q  <- numeric(0)
+  
+  l <- vol**(1./dim)
+  
+  if (type == "random") 
+  {
+    X0 <- array(data = runif(nPart*dim, min=-l/2, max=l/2), dim = c(nPart, dim))
+    q  <- sample(c(-1,+1), size=nPart, replace=TRUE)
+  } 
+  else if (type == "ordered") 
+  {
+    X0 <- array(data = NA, dim = c(nPart, dim))
+    nRow  <- ceiling(nPart**(1./dim))
+    nCol  <- round  (nPart**(1./dim))
+
+    offset <- l / 2 * (1 - 1/nCol) - l / 4
+
+    for (iterator in c(1:nPart)) {
+      X0[iterator,1] <- (floor((iterator-1) / nCol)) * lc - offset
+      X0[iterator,2] <- ((iterator-1) %% nCol      ) * lc - offset
+    }
+    
+    q <- rep(1, nPart)
+    for (iterator in c(2:nPart)) {
+      q[iterator] <- q[iterator-1]*-1
+    }
+  }
+  
+  return(list(X0=X0, q=q))
+}
+
 print("Load MCMC_functions.cpp.\n")
 
 sourceCpp("MCMC_functions.cpp")

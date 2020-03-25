@@ -3,16 +3,20 @@ myCreateNewFrame <- function(file_name) {
   
   # Columns:
   # 1 "RUN_ID": Run No.
-  # 2 "IAT"  : Integrated Autocorrelation Time
-  # 3 "E_end": Energy of Last State
-  # 4 "dim"  : Number of Dimensions
-  # 5 "rho"  : Particle Density
-  # 6 "vol"  : Cuboid Volume
-  # 7 "beta" : Inverse Temperature
-  # 8 "nIt"  : Number of MCMC iteration steps
-  # 9 "nPart": Number of Simulated Particles
-  #10 "t"    : Temperature
-  #11 X_end  : 
+  # 2 "IAT"   : Integrated Autocorrelation Time
+  # 3 "E_end" : Energy of Last State
+  # 4 "lambda": Distance betw. particles
+  # 5 "omega" : Nearest neigbour distance
+  # 6 "q"     : Cluster sizes
+  # 7 "kappa" : Number of particles in neighbourhood
+  # 8 "dim"   : Number of Dimensions
+  # 9 "rho"   : Particle Density
+  #10 "vol"   : Cuboid Volume
+  #11 "beta"  : Inverse Temperature
+  #12 "t"     : Temperature
+  #13 "nIt"   : Number of MCMC iteration steps
+  #14 "nPart" : Number of Simulated Particles
+  #15 X_end   : 
   
   resFrame <- data.frame(
     "RUN_ID"= 0,
@@ -40,6 +44,9 @@ myShowContentOverview <- function(file_name) {
   load(file_name)
 
   cat("This file contains the following parameter sets:\n")
+  if (length(resFrame$RUN_ID)==1) {
+    cat("File empty.\n")
+  }
   cat("\t d \t vol \t rho \t beta \t N_beta \t N_samples\n")
   v.dims <- resFrame$dim
   v.dims <- v.dims[!duplicated(v.dims)]
@@ -74,9 +81,14 @@ myGetBetaValues <- function(dim, vol, rho) {
   b <- resFrame$beta[which(resFrame$dim==dim & resFrame$vol==vol & resFrame$rho==rho)]
   b <- b[!duplicated(b)]
   b <- sort(b[!is.na(b)])
-  
-  # rm(dim, vol, rho)
   return(b)
+}
+
+myGetRhoValues <- function(dim, nPart) {
+  r <- resFrame$rho[which(resFrame$dim==dim & resFrame$nPart==nPart)]
+  r <- r[!duplicated(r)]
+  r <- sort(r[!is.na(r)])
+  return(r)
 }
 
 myGetObservables <- function(dim, vol, rho, beta) {
@@ -159,6 +171,10 @@ myGetObservables <- function(dim, vol, rho, beta) {
 }
 
 myPlotData <- function(x, y, yerr) {
+  # x    <- x   [which(!is.na(y))]
+  # yerr <- yerr[which(!is.na(y))]
+  # y    <- y   [which(!is.na(y))]
+  
   xlim <- c(1e-7, 1e7)
   # xlim <- c(1e-3, max(x.beta,na.rm=TRUE)+1)
   ylim <- c(0, max(y+yerr,na.rm=TRUE))
@@ -175,7 +191,22 @@ myPlotData <- function(x, y, yerr) {
   arrows(x0=x, y0=err_low, x1=x, y1=err_high, angle=90, code=3, length=0.02)
 }
 
-myMCMCSwipe <- function(dim, nPart=0, rho=0, vol=0, sigma=1, nIt=5e5, nResamples=1, x.beta, df) {
+myPointsLinesErrorsData <- function(x, y, yerr, col="black") {
+  # x    <- x   [which(!is.na(y))]
+  # yerr <- yerr[which(!is.na(y))]
+  # y    <- y   [which(!is.na(y))]
+  
+  # yerr[which(yerr < 0.1e0)] <- NA
+  
+  err_low  <- y - yerr
+  err_high <- y + yerr
+  
+  lines (x, y, col=col)
+  points(x, y, pch=4, col=col, cex=0.5)
+  arrows(x0=x, y0=err_low, x1=x, y1=err_high, angle=90, code=3, length=0.02, col=col)
+}
+
+myMCMCSwipe <- function(dim, nPart=0, rho=0, vol=0, sigma=1, sct="random", nIt=5e5, nResamples=1, x.beta, df) {
   cat("Starting swipe of ",nPart," particles (RUN_ID ",run_no,") over ",length(x.beta)," points:\n")
   
   if      (nPart == 0 & vol!=0 & rho!=0) nPart <- ceiling(vol * rho)
@@ -192,31 +223,12 @@ myMCMCSwipe <- function(dim, nPart=0, rho=0, vol=0, sigma=1, nIt=5e5, nResamples
       cat(j, ", ")
       
       # Generate start configuration
-      X0 <- array(data = runif(nPart*dim, min=-l/2, max=l/2), dim = c(nPart, dim))
-      q  <- sample(c(-1,+1), size=nPart, replace=TRUE)
-      
-      # --------------- Positioned on a regular lattice
-      # X0 <- array(data = NA, dim = c(nPart, dim))
-      # nRow  <- ceiling(nPart**(1./dim))
-      # nCol  <- round  (nPart**(1./dim))
-      # 
-      # rx <- vol**(1/2) / nRow / 2
-      # rx <- 1.5
-      # ry <- vol**(1/2) / nCol / 2
-      # ry <- 1.5
-      # offset <- vol**(1/2) * (1/2 - 1/2/nCol) - vol**(1/2) / 4
-      # 
-      # for (iterator in c(1:nPart)) {
-      #   X0[iterator,1] <- (floor((iterator-1) / nCol)) * rx - offset
-      #   X0[iterator,2] <- ((iterator-1) %% nCol      ) * ry - offset
-      # }
-      # q <- rep(1, nPart)
-      # for (iterator in c(2:nPart)) {
-      #   q[iterator] <- q[iterator-1]*-1
-      # }
-      # rm(rx,ry,offset)
-      
-      
+      init_config <- gen_initConfig(type=sct, dim=dim, vol=vol, nPart=nPart)
+      X0 <- init_config$X0
+      q  <- init_config$q
+      rm(init_config)
+
+            
       res <- MCMC_CPP(nIt, nPart, vol, 1/x.beta[i], sigma, X0, q) # Make Markov Chain
       
       

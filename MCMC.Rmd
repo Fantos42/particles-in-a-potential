@@ -14,43 +14,24 @@ source("DataFrameHelper.R")
 ```{r single_simulation}
 # --------------------------------------------------------------------------------
 # HYPERPARAMETERS:
-d               <- 2    # Number of dimensions
+dim             <- 2    # Number of dimensions
 nPart           <- 50
 particleDensity <- 0.05
-beta            <- 1e0
+beta            <- 1e3
 
 nIt             <- 0.5e6  # Number of iterations
 # nIt             <- 1
 
 t     <- 1/beta # Temperature of heat bath
 vol   <- nPart / particleDensity
-l     <- vol**(1/d)
+l     <- vol**(1/dim)
 # --------------------------------------------------------------------------------
-# Start configuration:
-X0 <- array(data = runif(nPart*d, min=-vol**(1/d)/2, max=vol**(1/d)/2), dim = c(nPart, d))
-q <- c(rep(+1,ceiling(nPart/2)),rep(-1,floor(nPart/2)))
-
-# --------------- Positioned on a regular lattice
-# X0 <- array(data = NA, dim = c(nPart, d))
-# nRow  <- ceiling(nPart**(1./d))
-# nCol  <- round  (nPart**(1./d))
-# 
-# rx <- vol**(1/2) / nRow / 2
-# rx <- 1.5
-# ry <- vol**(1/2) / nCol / 2
-# ry <- 1.5
-# offset <- vol**(1/2) * (1/2 - 1/2/nCol) - vol**(1/2) / 4
-# 
-# for (i in c(1:nPart)) {
-#   X0[i,1] <- (floor((i-1) / nCol)) * rx - offset
-#   X0[i,2] <- ((i-1) %% nCol      ) * ry - offset
-# }
-# q <- rep(1, nPart)
-# for (j in c(2:nPart)) {
-#   q[j] <- q[j-1]*-1
-# }
-# rm(rx,ry,offset)
-
+# Start configuration: (type="ordered" or type="random")
+type <- "random"
+init_config <- gen_initConfig(type=type, dim=dim, vol=vol, nPart=nPart)
+X0 <- init_config$X0
+q  <- init_config$q
+rm(init_config)
 show_particles(X0, q, vol)
 # --------------------------------------------------------------------------------
 cat("Run MCMC particles in a potential . .\n")
@@ -71,9 +52,9 @@ cat("Omega: ", mean(MCMC_Single_Run$omega), "\n")
 cat("Lambda: ", mean(MCMC_Single_Run$lambda), "\n")
 cat("Kappa: ", mean(MCMC_Single_Run$kappa), "\n")
 # print(MCMC_Single_Run$X)
-# print(vol**(1/d)/2)
+# print(vol**(1/dim)/2)
 # --------------------------------------------------------------------------------
-rm(d, particleDensity, vol, beta, t, nPart, l, X0, q, start_time, end_time, t2)
+rm(dim, particleDensity, vol, beta, t, nPart, l, X0, q, start_time, end_time, t2)
 # --------------------------------------------------------------------------------
 ```
 
@@ -98,7 +79,7 @@ cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds 
 ```
 
 ```{r}
-myCreateNewFrame("MCMC_Results_V7_randStart.RData")
+# myCreateNewFrame("MCMC_Results_V7_randStart.RData")
 
 myShowContentOverview("MCMC_Results_V7_randStart.RData")
 ```
@@ -113,10 +94,10 @@ run_no <- max(resFrame$RUN_ID, na.rm=TRUE)+1
 # HYPERPARAMETERS:
 dim             <- 2   
 nPart           <- 50
-rho             <- 0.05
+rho             <- 0.1
 
 nIt             <- 0.5e6
-nResamples      <- 4
+nResamples      <- 7
 # --------------------------------------------------------------------------------
 # Betas To Calculate
 x.beta <- exp(log(10)*seq(from=-7, to=7, length.out=71))
@@ -164,6 +145,7 @@ myPlotData(1/plt.data$x, plt.data$y.kappa , plt.data$y.kappa_Err )
 rm(resFrame)
 rm(plt.data, dim, rho, vol, file_name)
 ```
+
 ```{r plots}
 source("DataFrameHelper.R")
 file_name <- "MCMC_Results_V7_randStart.RData"
@@ -171,7 +153,7 @@ load(file_name)
 # --------------------------------------------------------------------------------
 dim             <- 2   
 nPart           <- 50
-rho             <- 0.05
+rho             <- 0.1
 vol             <- nPart/rho
 # --------------------------------------------------------------------------------
 x.beta <- myGetBetaValues(dim=dim, vol=vol, rho=rho)
@@ -216,6 +198,40 @@ rm(resFrame)
 rm(plt.data, dim, rho, vol, file_name)
 ```
 
+```{r plot_orderParam}
+source("DataFrameHelper.R")
+file_name <- "MCMC_Results_V7_randStart.RData"
+load(file_name)
+# --------------------------------------------------------------------------------
+dim             <- 2   
+nPart           <- 50
+# --------------------------------------------------------------------------------
+colours <- c("red","green", "blue", "orange", "pink", "magenta")
+observables <- c("lambda", "omega", "q", "kappa")
+obs_id <- c(8,10,4,12)
+y_high <- c(40,2.2,15,3)
+
+z.rho  <- myGetRhoValues(dim=dim, nPart=nPart)
+xlim <- c(1e-4, 1e3)
+
+
+for (j in c(1:length(obs_id))) {
+  ylim <- c(0, y_high[j])
+  plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log="x", main = "", xlab = "T", ylab = observables[j])
+  
+  for (i in c(1:length(z.rho))) {
+    x.beta   <- myGetBetaValues (dim=dim, vol=nPart/z.rho[i], rho=z.rho[i])
+    plt.data <- myGetObservables(dim=dim, vol=nPart/z.rho[i], rho=z.rho[i], beta=x.beta)
+    
+    myPointsLinesErrorsData(1./plt.data$x, plt.data[[obs_id[j]]], plt.data[[obs_id[j]+1]], col=colours[i])
+    
+  }
+  legend("topright", legend=z.rho, col=colours, lty=1)  
+}
+
+# rm(resFrame)
+rm(dim, z.rho, file_name)
+```
 
 ## deprecated
 
