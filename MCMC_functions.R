@@ -94,7 +94,8 @@ gen_initConfig <- function(type="random", dim, vol, nPart, lc=1.5) {
   if (type == "random") 
   {
     X0 <- array(data = runif(nPart*dim, min=-l/2, max=l/2), dim = c(nPart, dim))
-    q  <- sample(c(-1,+1), size=nPart, replace=TRUE)
+    q  <- c(rep(+1,ceiling(nPart/2)),rep(-1,floor(nPart/2)))
+    # q  <- sample(c(-1,+1), size=nPart, replace=TRUE)
   } 
   else if (type == "ordered") 
   {
@@ -121,7 +122,5 @@ gen_initConfig <- function(type="random", dim, vol, nPart, lc=1.5) {
 print("Load MCMC_functions.cpp.\n")
 
 sourceCpp("MCMC_functions.cpp")
-# sourceCpp("MCMC_Collective.cpp")
-# sourceCpp("MCMC_varyAll.cpp")
 
 print("Loaded MCMC_functions.R.\n")

@@ -8,6 +8,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 source("MCMC_functions.R")
 source("DataFrameHelper.R")
+
+print("Init complete.")
 ```
 
 
@@ -17,7 +19,7 @@ source("DataFrameHelper.R")
 dim             <- 2    # Number of dimensions
 nPart           <- 50
 particleDensity <- 0.05
-beta            <- 1e3
+beta            <- 5e1
 
 nIt             <- 0.5e6  # Number of iterations
 # nIt             <- 1
@@ -54,28 +56,31 @@ cat("Kappa: ", mean(MCMC_Single_Run$kappa), "\n")
 # print(MCMC_Single_Run$X)
 # print(vol**(1/dim)/2)
 # --------------------------------------------------------------------------------
-rm(dim, particleDensity, vol, beta, t, nPart, l, X0, q, start_time, end_time, t2)
+rm(dim, particleDensity, vol, beta, t, nPart, l, X0, q, start_time, end_time, t2, type, nIt)
 # --------------------------------------------------------------------------------
 ```
 
 ```{r evaluation_acf}
-E <- cumsum(MCMC_Single_Run$dE)
-E <- MCMC_Single_Run$dE
-# print(MCMC_Single_Run$dE)
-x.ticks <- c(1e5:nIt)
-plot(x=x.ticks,y=E[x.ticks],type='l',log='')
-# plot(x=x.ticks,y=E[x.ticks]+abs(min(E[x.ticks]))+1,type='l',log='y')
-rm(x.ticks)
-
-acf_range <- c((nIt-1e5):nIt)
-start_time <- Sys.time()
-acf(E[acf_range], lag.max = 50000)
-cat("ACF runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
-
-acf_range <- c((nIt-3e5):nIt)
-start_time <- Sys.time()
-cat("IAT_custom: ",IAT_CPP(E[acf_range]),"\n")
-cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
+nIt             <- 0.5e6
+E <- cumsum(MCMC_Single_Run$E)
+print(E)
+# # E <- MCMC_Single_Run$dE
+# # print(MCMC_Single_Run$dE)
+# x.ticks <- c(1e1:nIt)
+# # plot(x=x.ticks,y=E[x.ticks],type='l',log='')
+# # plot(x=x.ticks,y=E[x.ticks]+abs(min(E[x.ticks]))+1,type='l',log='y')
+# rm(x.ticks)
+# 
+# acf_range <- c((nIt-1e5):nIt)
+# start_time <- Sys.time()
+# # acf(E[acf_range], lag.max = 50000)
+# cat("ACF runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
+# 
+# acf_range <- c((nIt-3e5):nIt)
+# start_time <- Sys.time()
+# cat("IAT_custom: ",IAT_CPP(E[acf_range]),"\n")
+# cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
+rm(nIt)
 ```
 
 ```{r}
