@@ -111,7 +111,7 @@ double getDist(std::vector<double> a, std::vector<double> b) {
   return std::sqrt(dist);
 }
 
-double estimate_clstSize(std::vector<std::vector<double>> X) {
+std::vector<int> estimate_clstSize(std::vector<std::vector<double>> X) {
   const int nPart = X.size();
   
   const double min_dist = 2;
@@ -121,7 +121,6 @@ double estimate_clstSize(std::vector<std::vector<double>> X) {
   
   std::vector<int> idx(nPart, +1);
   int nFree = nPart;
-  
   
   while (nFree > 0) 
   {
@@ -166,13 +165,7 @@ double estimate_clstSize(std::vector<std::vector<double>> X) {
     }
   }
   
-  // Calc mean cluster size and return
-  double mean_size = 0;
-  for (unsigned int i = 0; i < cluster_sizes.size(); i++) {
-    mean_size += cluster_sizes[i];
-  }
-  
-  return mean_size/cluster_sizes.size();
+  return cluster_sizes;
 }
 
 // =======================================================
@@ -218,10 +211,10 @@ std::vector<double> estimate_nearest_neighbour_dists(std::vector<std::vector<dou
   return(min_dist_vec);
 }
 
-std::vector<double> estimate_Nparticles_neighbourhood(std::vector<std::vector<double>> X){
+std::vector<int> estimate_Nparticles_neighbourhood(std::vector<std::vector<double>> X){
   const unsigned int nPart = X.size();
   const double min_dist = 2;
-  std::vector<double> N_neigh; 
+  std::vector<int> N_neigh; 
   
   for(unsigned int i = 0; i < nPart; i++){
     unsigned int neigh = 0;
@@ -249,12 +242,6 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, Nume
   // ----------------------- Observables
   NumericVector dE(nIt, 0.0);
   dE[0] = E_CPP(X0, q);
-  
-  const int N_clstSize_samples = 10;
-  int k_clstSize               = 0;
-  const int n_min_clstSize           = nIt-1e4;
-  std::vector<double> clstSize(N_clstSize_samples, -1);
-  const double stp_clstSize    = (nIt - n_min_clstSize)/N_clstSize_samples;
   // -----------------------
   
   std::vector<std::vector<double>> X(nPart, std::vector<double>(d,0));
@@ -328,15 +315,8 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, Nume
       for (int i = 0; i < d; i++) X[k][i] = old_x[i];
       dE[n] = dE[n-1];
     }
-    // ---------------------------------------------------------------------------
-    if ((n-n_min_clstSize) >= k_clstSize * stp_clstSize) {
-      clstSize[k_clstSize] = estimate_clstSize(X);
-      k_clstSize++;
-    }
-    // ---------------------------------------------------------------------------
   }
   //Rcout << "Acceptance: " << accept_rate/nIt*100. << "%" << std::endl;
-  
   
   for (int i = 0; i < nPart; i++) {
     for (int j = 0; j < d; j++) {
@@ -344,12 +324,10 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, Nume
     }
   }
   
-  // Calc mean cluster size
-  double mean_size = 0;
-  for (unsigned int i = 0; i < clstSize.size(); i++) {
-    mean_size += clstSize[i];
-  }
-  mean_size = mean_size/clstSize.size();
+  //Estimate Observables
+  // ---------------------------------------------------------------------------
+  //Estimate cluster sizes
+  std::vector<int> cluster_sizes = estimate_clstSize(X); 
   
   //Estimate distances between particles of final config
   std::vector<double> particle_dists = estimate_particle_dists(X);
@@ -358,13 +336,14 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, Nume
   std::vector<double> nearest_neigh_dists = estimate_nearest_neighbour_dists(X);
   
   //Estimate number of particles in direct neighbourhood of final config
-  std::vector<double> N_particles_neighbourhood = estimate_Nparticles_neighbourhood(X);
+  std::vector<int> N_particles_neighbourhood = estimate_Nparticles_neighbourhood(X);
+  // ---------------------------------------------------------------------------
   
   Rcpp::List rList = Rcpp::List::create(
     Named("E")          = dE, 
     Named("X")          = X0, 
     Named("Accpetance") = accept_rate/(nIt-T_burnIn_2), 
-    Named("q")          = mean_size, 
+    Named("q")          = cluster_sizes, 
     Named("lambda")     = particle_dists, 
     Named("omega")      = nearest_neigh_dists, 
     Named("kappa")      = N_particles_neighbourhood

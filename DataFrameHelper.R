@@ -79,24 +79,6 @@ myGetBetaValues <- function(dim, vol, rho) {
   return(b)
 }
 
-myGetMeanQValues <- function(dim, vol, rho, beta) {
-  y.q <- array(NA, dim= c(length(beta), 2)) # [,1]: IAT, [,2]: Standard Error
-  # y.qsd <- rep(NA, length(beta))
-  
-  for (i in c(1:length(beta))) {
-    idx <- which(resFrame$dim==d & resFrame$rho==particleDensity & resFrame$vol==vol & resFrame$beta==beta[i])
-    
-    if (length(idx)!=0) {
-      y.q[i,1] <- mean(resFrame$q[idx])
-      # y.q[i,2] <- sqrt(var(resFrame$q[idx]) / length(idx))
-      y.q[i,2] <- getBootstrapMeanError(resFrame$q[idx])
-      # y.qsd[i] <- sd(resFrame$q[idx])
-    }
-  }
-  
-  return(list(x=beta, y=y.q[,1], yerr=y.q[,2]))
-}
-
 myGetObservables <- function(dim, vol, rho, beta) {
   
   y.iat <- array(NA, dim= c(length(beta), 2))
@@ -112,20 +94,31 @@ myGetObservables <- function(dim, vol, rho, beta) {
       # y.iat[i,1] <- mean(resFrame$iat[idx])
       # y.iat[i,2] <- sqrt(var(resFrame$iat[idx]) / length(idx))
       # y.iat[i,2] <- getBootstrapMeanError(resFrame$iat[idx], N_replicas = 10)
-      
-      y.q[i,1] <- mean(resFrame$q[idx])
-      # y.q[i,2] <- sqrt(var(resFrame$q[idx]) / length(idx))
-      y.q[i,2] <- getBootstrapMeanError(resFrame$q[idx], N_replicas = 100)
+      # temp <- as.vector(resFrame$q[[idx]])
+      # 
+      # y.q[i,1] <- mean(temp)
+      # y.q[i,2] <- sqrt(var(temp) / length(idx))
+      # y.q[i,2] <- getBootstrapMeanError(resFrame$q[idx], N_replicas = 100)
 
       y.E[i,1] <- mean(resFrame$E_end[idx])
       # y.E[i,2] <- sqrt(var(resFrame$E_end[idx]) / length(idx))
       y.E[i,2] <- getBootstrapMeanError(resFrame$E_end[idx], N_replicas = 100)
     
+      qs <- numeric(0)
+      for (j in c(1:length(idx))) {
+        qs <- c(qs, resFrame$q[[idx[j]]])
+      }
+      y.q[i,1] <- mean(qs)
+      # y.q[i,2] <- sqrt(var(qs))
+      y.q[i,2] <- sqrt(var(qs) / length(qs))
+      rm(qs)
+      
       omegas <- numeric(0)
       for (j in c(1:length(idx))) {
         omegas <- c(omegas, resFrame$omega[[idx[j]]])
       }
       y.omega[i,1] <- mean(omegas)
+      # y.omega[i,2] <- sqrt(var(omegas))
       y.omega[i,2] <- sqrt(var(omegas) / length(omegas))
       # y.omega[i,2] <- getBootstrapMeanError(omegas, N_replicas = 100)
       rm(omegas)
@@ -137,6 +130,7 @@ myGetObservables <- function(dim, vol, rho, beta) {
       }
       y.lambda[i,1] <- mean(lambdas)
       y.lambda[i,2] <- sqrt(var(lambdas) / length(lambdas))
+      # y.lambda[i,2] <- sqrt(var(lambdas))
       # y.lambda[i,2] <- getBootstrapMeanError(lambdas, N_replicas = 100)
       rm(lambdas)
       
@@ -147,6 +141,7 @@ myGetObservables <- function(dim, vol, rho, beta) {
       }
       y.kappa[i,1] <- mean(kappas)
       y.kappa[i,2] <- sqrt(var(kappas) / length(kappas))
+      # y.kappa[i,2] <- sqrt(var(kappas))
       # y.kappa[i,2] <- getBootstrapMeanError(kappas, N_replicas = 100)
       rm(kappas)
     }
@@ -201,25 +196,25 @@ myMCMCSwipe <- function(dim, nPart=0, rho=0, vol=0, sigma=1, nIt=5e5, nResamples
       q  <- sample(c(-1,+1), size=nPart, replace=TRUE)
       
       # --------------- Positioned on a regular lattice
-      X0 <- array(data = NA, dim = c(nPart, dim))
-      nRow  <- ceiling(nPart**(1./dim))
-      nCol  <- round  (nPart**(1./dim))
-
-      rx <- vol**(1/2) / nRow / 2
-      rx <- 1.5
-      ry <- vol**(1/2) / nCol / 2
-      ry <- 1.5
-      offset <- vol**(1/2) * (1/2 - 1/2/nCol) - vol**(1/2) / 4
-
-      for (iterator in c(1:nPart)) {
-        X0[iterator,1] <- (floor((iterator-1) / nCol)) * rx - offset
-        X0[iterator,2] <- ((iterator-1) %% nCol      ) * ry - offset
-      }
-      q <- rep(1, nPart)
-      for (iterator in c(2:nPart)) {
-        q[iterator] <- q[iterator-1]*-1
-      }
-      rm(rx,ry,offset)
+      # X0 <- array(data = NA, dim = c(nPart, dim))
+      # nRow  <- ceiling(nPart**(1./dim))
+      # nCol  <- round  (nPart**(1./dim))
+      # 
+      # rx <- vol**(1/2) / nRow / 2
+      # rx <- 1.5
+      # ry <- vol**(1/2) / nCol / 2
+      # ry <- 1.5
+      # offset <- vol**(1/2) * (1/2 - 1/2/nCol) - vol**(1/2) / 4
+      # 
+      # for (iterator in c(1:nPart)) {
+      #   X0[iterator,1] <- (floor((iterator-1) / nCol)) * rx - offset
+      #   X0[iterator,2] <- ((iterator-1) %% nCol      ) * ry - offset
+      # }
+      # q <- rep(1, nPart)
+      # for (iterator in c(2:nPart)) {
+      #   q[iterator] <- q[iterator-1]*-1
+      # }
+      # rm(rx,ry,offset)
       
       
       res <- MCMC_CPP(nIt, nPart, vol, 1/x.beta[i], sigma, X0, q) # Make Markov Chain
@@ -238,7 +233,7 @@ myMCMCSwipe <- function(dim, nPart=0, rho=0, vol=0, sigma=1, nIt=5e5, nResamples
           "E_end"  = res$E[nIt], 
           "lambda" = I(list(res$lambda)),
           "omega"  = I(list(res$omega)),
-          "q"      = res$q,
+          "q"      = I(list(res$q)),
           "kappa"  = I(list(res$kappa)),
           "dim"    = dim,
           "rho"    = rho,

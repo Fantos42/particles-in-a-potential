@@ -16,8 +16,8 @@ source("DataFrameHelper.R")
 # HYPERPARAMETERS:
 d               <- 2    # Number of dimensions
 nPart           <- 50
-particleDensity <- 0.01
-beta            <- 1e7
+particleDensity <- 0.05
+beta            <- 1e0
 
 nIt             <- 0.5e6  # Number of iterations
 # nIt             <- 1
@@ -31,25 +31,25 @@ X0 <- array(data = runif(nPart*d, min=-vol**(1/d)/2, max=vol**(1/d)/2), dim = c(
 q <- c(rep(+1,ceiling(nPart/2)),rep(-1,floor(nPart/2)))
 
 # --------------- Positioned on a regular lattice
-X0 <- array(data = NA, dim = c(nPart, d))
-nRow  <- ceiling(nPart**(1./d))
-nCol  <- round  (nPart**(1./d))
-
-rx <- vol**(1/2) / nRow / 2
-rx <- 1.5
-ry <- vol**(1/2) / nCol / 2
-ry <- 1.5
-offset <- vol**(1/2) * (1/2 - 1/2/nCol) - vol**(1/2) / 4
-
-for (i in c(1:nPart)) {
-  X0[i,1] <- (floor((i-1) / nCol)) * rx - offset
-  X0[i,2] <- ((i-1) %% nCol      ) * ry - offset
-}
-q <- rep(1, nPart)
-for (j in c(2:nPart)) {
-  q[j] <- q[j-1]*-1
-}
-rm(rx,ry,offset)
+# X0 <- array(data = NA, dim = c(nPart, d))
+# nRow  <- ceiling(nPart**(1./d))
+# nCol  <- round  (nPart**(1./d))
+# 
+# rx <- vol**(1/2) / nRow / 2
+# rx <- 1.5
+# ry <- vol**(1/2) / nCol / 2
+# ry <- 1.5
+# offset <- vol**(1/2) * (1/2 - 1/2/nCol) - vol**(1/2) / 4
+# 
+# for (i in c(1:nPart)) {
+#   X0[i,1] <- (floor((i-1) / nCol)) * rx - offset
+#   X0[i,2] <- ((i-1) %% nCol      ) * ry - offset
+# }
+# q <- rep(1, nPart)
+# for (j in c(2:nPart)) {
+#   q[j] <- q[j-1]*-1
+# }
+# rm(rx,ry,offset)
 
 show_particles(X0, q, vol)
 # --------------------------------------------------------------------------------
@@ -66,7 +66,7 @@ show_particles(MCMC_Single_Run$X, q, vol)
 cat("Number of {positive, negative} particles: {", length(which(q==+1)), ",", length(which(q==-1)),"}\n")
 cat("Runtime: ",as.double(t2<- end_time - start_time, units='secs'),"\n")
 cat("Acceptrate: ", MCMC_Single_Run$Accpetance*100,"%\n")
-cat("q: ", MCMC_Single_Run$q, "\n")
+cat("q: ", mean(MCMC_Single_Run$q), "\n")
 cat("Omega: ", mean(MCMC_Single_Run$omega), "\n")
 cat("Lambda: ", mean(MCMC_Single_Run$lambda), "\n")
 cat("Kappa: ", mean(MCMC_Single_Run$kappa), "\n")
@@ -98,33 +98,33 @@ cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds 
 ```
 
 ```{r}
-myCreateNewFrame("MCMC_Results_V6.RData")
+myCreateNewFrame("MCMC_Results_V7_randStart.RData")
 
-myShowContentOverview("MCMC_Results_V6.RData")
+myShowContentOverview("MCMC_Results_V7_randStart.RData")
 ```
 
 ```{r MCMC_Swipe}
 # --------------------------------------------------------------------------------
 # LOAD RESULTS DATA FRAME FROM DISK
-file_name <- "MCMC_Results_V6.RData"
+file_name <- "MCMC_Results_V7_randStart.RData"
 load(file_name)
 run_no <- max(resFrame$RUN_ID, na.rm=TRUE)+1
 # --------------------------------------------------------------------------------
 # HYPERPARAMETERS:
 dim             <- 2   
 nPart           <- 50
-rho             <- 0.02
+rho             <- 0.05
 
 nIt             <- 0.5e6
-nResamples      <- 2
+nResamples      <- 4
 # --------------------------------------------------------------------------------
 # Betas To Calculate
 x.beta <- exp(log(10)*seq(from=-7, to=7, length.out=71))
 
 x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
-x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
-x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
-x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
+# x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
+# x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
+# x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
 # x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
 # x.beta <- x.beta[which(x.beta>=1e1)]
 # x.beta <- x.beta[which(x.beta< 1e1)]
@@ -141,12 +141,12 @@ rm(file_name, run_no, dim, nPart, rho, nIt, nResamples, x.beta)
 
 ```{r plot_orderParam}
 source("DataFrameHelper.R")
-file_name <- "MCMC_Results_V6.RData"
+file_name <- "MCMC_Results_V7_randStart.RData"
 load(file_name)
 # --------------------------------------------------------------------------------
 dim             <- 2   
 nPart           <- 50
-rho             <- 0.02
+rho             <- 0.05
 vol             <- nPart/rho
 # --------------------------------------------------------------------------------
 x.beta <- myGetBetaValues(dim=dim, vol=vol, rho=rho)
@@ -157,244 +157,67 @@ plt.data <- myGetObservables(dim=dim, vol=vol, rho=rho, beta=x.beta)
 rm(x.beta)
 
 myPlotData(1/plt.data$x, plt.data$y.q     , plt.data$y.q_Err     )
-# myPlotData(1/plt.data$x, plt.data$y.lambda, plt.data$y.lambda_Err)
-# myPlotData(1/plt.data$x, plt.data$y.omega , plt.data$y.omega_Err )
-# myPlotData(1/plt.data$x, plt.data$y.kappa , plt.data$y.kappa_Err )
+myPlotData(1/plt.data$x, plt.data$y.lambda, plt.data$y.lambda_Err)
+myPlotData(1/plt.data$x, plt.data$y.omega , plt.data$y.omega_Err )
+myPlotData(1/plt.data$x, plt.data$y.kappa , plt.data$y.kappa_Err )
 
 rm(resFrame)
 rm(plt.data, dim, rho, vol, file_name)
 ```
-```{r plot_mult_orderparam}
+```{r plots}
 source("DataFrameHelper.R")
-file_name <- "MCMC_Results_V5.RData"
+file_name <- "MCMC_Results_V7_randStart.RData"
 load(file_name)
 # --------------------------------------------------------------------------------
 dim             <- 2   
 nPart           <- 50
-# rho             <- 0.02
-# vol             <- nPart/rho
+rho             <- 0.05
+vol             <- nPart/rho
 # --------------------------------------------------------------------------------
-colors <- c("red", "green", "blue", "orange", "purple", "pink", "magenta", "yellow")
+x.beta <- myGetBetaValues(dim=dim, vol=vol, rho=rho)
 
-a.rho <- resFrame$rho[which(resFrame$dim==dim & resFrame$nPart==nPart)]
-a.rho <- a.rho[!duplicated(a.rho)]
-a.rho <- sort(a.rho[!is.na(a.rho)])
+plt.data <- myGetObservables(dim=dim, vol=vol, rho=rho, beta=x.beta)
+rm(x.beta)
 
-print(a.rho)
-
-# ylim <- c(1e0, max(resFrame$q[which(resFrame$dim==d & resFrame$vol==vol)]))
-# 
-# plot(NA, NA, xlim=c(5e-5, 1e5), ylim = ylim, log="x", xlab="1/T", ylab="q") 
-# 
-# for (ridx in c(1:length(a.rho))) {
-#   x.beta <- resFrame$beta[which(resFrame$rho==a.rho[ridx] & resFrame$dim==d & resFrame$vol==vol)]
-#   x.beta <- x.beta[!duplicated(x.beta)]
-#   x.beta <- sort(x.beta[!is.na(x.beta)])
-# 
-#   y.q <- array(NA, dim= c(length(x.beta), 2)) # [,1]: IAT, [,2]: Standard Error
-#   for (i in c(1:length(x.beta))) {
-#     idx <- which(resFrame$dim==d & resFrame$rho==a.rho[ridx] & resFrame$vol==vol & resFrame$beta==x.beta[i])
-#     if (length(idx)!=0) {
-#       y.q[i,1] <- mean(resFrame$q[idx])
-#       y.q[i,2] <- sqrt(var(resFrame$q[idx]) / length(idx))
-#     }
-#   }
-# 
-#   y.q[,2][which(y.q[ ,2] < 1e0)] <- NA
-#   err_low <- y.q[ ,1]-y.q[ ,2]
-#   err_high<- y.q[ ,1]+y.q[ ,2]
-#   
-#   lines(x.beta, y.q[ ,1], col=colors[ridx]) 
-#   points(x.beta, y.q[ ,1], pch=4, col="black", cex=0.5)
-#   arrows(x0=x.beta, y0=y.q[ ,1]-y.q[ ,2], x1=x.beta, y1=y.q[ ,1]+y.q[ ,2], angle=90, code=3, length=0.05)
-# }
-# 
-# legend("topleft",legend=c("Rho Values:",a.rho),col=c(0,colors[c(1:length(a.rho))]), lty=c(0,rep(1,length(a.rho))), cex=1)
-# 
-# rm(resFrame)
-# rm(x.beta, y.q, a.rho)
-# rm(file_name, d, vol)
-# rm(i, idx, ridx, colors)
-```
+#plot custom
+x <- 1/plt.data$x     
+y1 <- plt.data$y.q/10
+y1err <- plt.data$y.q_Err/10
+y2 <- plt.data$y.lambda/sqrt(vol)
+y2err <- plt.data$y.lambda_Err/sqrt(vol)
+y3 <- plt.data$y.omega
+y3err <- plt.data$y.omega_Err
+y4 <- plt.data$y.kappa
+y4err <- plt.data$y.kappa_Err
 
 
+xlim <- c(1e-3, 1e4)
+ylim <- c(0, max(y1+y1err, y2+y2err, y3+y3err, y4+y4err, na.rm=TRUE))
 
+log <- "x"
 
+plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log=log, main = "Observables vs. Temperature", xlab = "T", ylab = "Value")
+points(x, y1, pch=4, col="black", cex=0.5)
+points(x, y2, pch=4, col="green", cex=0.5)
+points(x, y3, pch=4, col="blue", cex=0.5)
+points(x, y4, pch=4, col="red", cex=0.5)
+lines(x, y1, col="black")
+lines(x, y2, col="green")
+lines(x, y3, col="blue")
+lines(x, y4, col="red")
+arrows(x0=x, y0=y1-y1err, x1=x, y1=y1+y1err, angle=90, code=3, length=0.02)
+arrows(x0=x, y0=y2-y2err, x1=x, y1=y2+y2err, angle=90, code=3, length=0.02)
+arrows(x0=x, y0=y3-y3err, x1=x, y1=y3+y3err, angle=90, code=3, length=0.02)
+arrows(x0=x, y0=y4-y4err, x1=x, y1=y4+y4err, angle=90, code=3, length=0.02)
 
-
-
-```{r plot_temperature_series_beta}
-# --------------------------------------------------------------------------------
-# LOAD RESULTS DATA FRAME FROM DISK
-file_name <- "MCMC_Results_V4_w_q.RData"
-load(file_name)
-# print(resFrame)
-# --------------------------------------------------------------------------------
-# HYPERPARAMETERS:
-d               <- 1    # Number of dimensions
-particleDensity <- 0.5
-vol             <- 2e2  # Volume of space
-# beta            <- 1000
-# These below are implied
-# t     <- 1/beta # Temperature of heat bath
-nPart <- ceiling(vol * particleDensity)  # Number of particles
-l     <- vol**(1/d)
-# --------------------------------------------------------------------------------
-x.beta <- resFrame$beta[!duplicated(resFrame$beta)]
-x.beta <- sort(x.beta[!is.na(x.beta)])
-# x.beta <- x.beta[which(x.beta<0.1)]
-y.iat <- array(NA, dim= c(length(x.beta), 2)) # [,1]: IAT, [,2]: Standard Error
-
-for (i in c(1:length(x.beta))) {
-  idx <- which(resFrame$dim==d & resFrame$rho==particleDensity & resFrame$vol==vol & resFrame$beta==x.beta[i])
-  if (length(idx)!=0) {
-    y.iat[i,1] <- mean(resFrame$IAT[idx])
-    y.iat[i,2] <- sqrt(var(resFrame$IAT[idx]) / length(resFrame$IAT[idx]))
-  }
-}
-
-plot(x.beta, y.iat[ ,1], xlim=c(5e-5, 1e5), ylim = c(5e1, 1e5), type = "l", log="xy") 
-arrows(x0=x.beta, y0=y.iat[ ,1]-y.iat[ ,2], x1=x.beta, y1=y.iat[ ,1]+y.iat[ ,2], angle=90, code=3, length=0.05)
-lines(x=x.beta[which(x.beta>1e1)],y=1.6e4+1e-5*x.beta[which(x.beta>1e1)], col="red")
-lines(x=x.beta[which(x.beta<1e1)],y=1e2+1e3*x.beta[which(x.beta<1e1)], col="red")
+# legend("topright", legend = c("q", "lambda", "omega", "kappa"), lty = c(1,1,1,1), col = c("black", "green", "blue", "red"))
 
 rm(resFrame)
-rm(x.beta, y.iat, i, d, particleDensity, vol, nPart, l, idx, file_name)
+rm(plt.data, dim, rho, vol, file_name)
 ```
 
-```{r plot_ticks}
-plot(NA, NA, xlim=c(7e-6, 1e6), ylim = c(5e1, 1e5), type = "l", log="xy") 
-x.ticks <- exp(log(10)*seq(from=-7, to=7, length.out=71))
 
-x.ticks <- x.ticks[which(c(1:length(x.ticks))%%2==0)]
-x.ticks <- x.ticks[which(c(1:length(x.ticks))%%2==0)]
-
-# print(x.ticks)
-abline(v=x.ticks, col="gray")
-```
-
-```{r plot_parallel_rho}
-# --------------------------------------------------------------------------------
-# LOAD RESULTS DATA FRAME FROM DISK
-file_name <- "MCMC_Results_V4_w_q.RData"
-load(file_name)
-# print(resFrame)
-# --------------------------------------------------------------------------------
-# HYPERPARAMETERS:
-d               <- 1    # Number of dimensions
-vol             <- 2e2  # Volume of space
-# --------------------------------------------------------------------------------
-colors <- c("red", "green", "blue", "orange")
-
-a.rho <- resFrame$rho[which(resFrame$dim==d & resFrame$vol==vol)][!duplicated(resFrame$rho)]
-a.rho <- sort(a.rho[!is.na(a.rho)])
-
-plot(NA, NA, xlim=c(1e-7, 1e5), ylim = c(5e1, 1e5), log="xy", xlab="Beta", ylab="IAT") 
-
-for (ridx in c(1:length(a.rho))) {
-  x.beta <- resFrame$beta[which(resFrame$rho==a.rho[ridx])]
-  x.beta <- x.beta[!duplicated(x.beta)]
-  x.beta <- sort(x.beta[!is.na(x.beta)])
-  
-  y.iat <- array(NA, dim= c(length(x.beta), 2)) # [,1]: IAT, [,2]: Standard Error
-  for (i in c(1:length(x.beta))) {
-    idx <- which(resFrame$dim==d & resFrame$rho==a.rho[ridx] & resFrame$vol==vol & resFrame$beta==x.beta[i])
-    if (length(idx)!=0) {
-      y.iat[i,1] <- mean(resFrame$IAT[idx])
-      y.iat[i,2] <- sqrt(var(resFrame$IAT[idx]) / length(resFrame$IAT[idx]))
-    }
-  }
-  
-  lines(x.beta, y.iat[ ,1], col=colors[ridx]) 
-  # arrows(x0=x.beta, y0=y.iat[ ,1]-y.iat[ ,2], x1=x.beta, y1=y.iat[ ,1]+y.iat[ ,2], angle=90, code=3, length=0.05)
-}
-
-legend("topleft",legend=c("Rho Values:",a.rho),col=colors[c(0:length(a.rho))], lty=c(0,rep(1,length(a.rho))), cex=1)
-
-rm(resFrame)
-rm(x.beta, y.iat, a.rho)
-rm(file_name, d, vol)
-rm(i, idx, ridx, colors)
-```
-
-```{r plot_temperature_series_q}
-# --------------------------------------------------------------------------------
-file_name <- "MCMC_Results_V5.RData"
-load(file_name)
-# --------------------------------------------------------------------------------
-d               <- 2   
-particleDensity <- 36/4e2
-vol             <- 4e2
-# --------------------------------------------------------------------------------
-betaVals <- myGetBetaValues(dim=d, vol=vol, rho=particleDensity)
-
-# x.beta <- x.beta[which(x.beta>3e0)]
-
-plt.data <- myGetMeanQValues(dim=d, vol=vol, rho=particleDensity, beta=betaVals)
-rm(betaVals)
-
-
-myPlotData(plt.data)
-
-# x.b <- exp(log(10)*seq(from=-4, to=5, length.out=45))
-# x.b <- x.b[which(x.b>0.5e0)]
-# y.q <- 2 + 4 * x.b
-# lines(x.b, y.q)
-
-rm(resFrame)
-rm(plt.data, d, particleDensity, vol, file_name)
-```
-
-```{r plot_parallel_rho_for_q}
-# --------------------------------------------------------------------------------
-# LOAD RESULTS DATA FRAME FROM DISK
-file_name <- "MCMC_Results_V4_w_q.RData"
-load(file_name)
-# --------------------------------------------------------------------------------
-# HYPERPARAMETERS:
-d               <- 3    # Number of dimensions
-vol             <- 1e4  # Volume of space
-# --------------------------------------------------------------------------------
-colors <- c("red", "green", "blue", "orange", "purple", "pink", "magenta", "yellow")
-
-a.rho <- resFrame$rho[which(resFrame$dim==d & resFrame$vol==vol)]
-a.rho <- a.rho[!duplicated(a.rho)]
-a.rho <- sort(a.rho[!is.na(a.rho)])
-
-ylim <- c(1e0, max(resFrame$q[which(resFrame$dim==d & resFrame$vol==vol)]))
-
-plot(NA, NA, xlim=c(5e-5, 1e5), ylim = ylim, log="x", xlab="1/T", ylab="q") 
-
-for (ridx in c(1:length(a.rho))) {
-  x.beta <- resFrame$beta[which(resFrame$rho==a.rho[ridx] & resFrame$dim==d & resFrame$vol==vol)]
-  x.beta <- x.beta[!duplicated(x.beta)]
-  x.beta <- sort(x.beta[!is.na(x.beta)])
-
-  y.q <- array(NA, dim= c(length(x.beta), 2)) # [,1]: IAT, [,2]: Standard Error
-  for (i in c(1:length(x.beta))) {
-    idx <- which(resFrame$dim==d & resFrame$rho==a.rho[ridx] & resFrame$vol==vol & resFrame$beta==x.beta[i])
-    if (length(idx)!=0) {
-      y.q[i,1] <- mean(resFrame$q[idx])
-      y.q[i,2] <- sqrt(var(resFrame$q[idx]) / length(idx))
-    }
-  }
-
-  y.q[,2][which(y.q[ ,2] < 1e0)] <- NA
-  err_low <- y.q[ ,1]-y.q[ ,2]
-  err_high<- y.q[ ,1]+y.q[ ,2]
-  
-  lines(x.beta, y.q[ ,1], col=colors[ridx]) 
-  points(x.beta, y.q[ ,1], pch=4, col="black", cex=0.5)
-  arrows(x0=x.beta, y0=y.q[ ,1]-y.q[ ,2], x1=x.beta, y1=y.q[ ,1]+y.q[ ,2], angle=90, code=3, length=0.05)
-}
-
-legend("topleft",legend=c("Rho Values:",a.rho),col=c(0,colors[c(1:length(a.rho))]), lty=c(0,rep(1,length(a.rho))), cex=1)
-
-rm(resFrame)
-rm(x.beta, y.q, a.rho)
-rm(file_name, d, vol)
-rm(i, idx, ridx, colors)
-```
+## deprecated
 
 ```{r plot_results_with_fit}
 # --------------------------------------------------------------------------------
