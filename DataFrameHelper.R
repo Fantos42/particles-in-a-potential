@@ -229,7 +229,7 @@ myMCMCSwipe <- function(dim, nPart=0, rho=0, vol=0, sigma=1, sct="random", nIt=5
       rm(init_config)
 
             
-      res <- MCMC_CPP(nIt, nPart, vol, 1/x.beta[i], sigma, X0, q) # Make Markov Chain
+      res <- MCMC_CPP(nIt, nPart, vol, 1/x.beta[i], sigma, N_burnIn=0, X0, q) # Make Markov Chain
       
       
       # Calculate ovbservables

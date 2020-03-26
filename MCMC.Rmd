@@ -8,8 +8,6 @@ knitr::opts_chunk$set(echo = TRUE)
 
 source("MCMC_functions.R")
 source("DataFrameHelper.R")
-
-print("Init complete.")
 ```
 
 
@@ -39,7 +37,7 @@ show_particles(X0, q, vol)
 cat("Run MCMC particles in a potential . .\n")
 
 start_time <- Sys.time()
-MCMC_Single_Run <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, X0, q)
+MCMC_Single_Run <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, N_burnIn=0, X0, q)
 end_time <- Sys.time()
 # --------------------------------------------------------------------------------
 # pdf("config_rho010_t0001.pdf")
@@ -323,3 +321,107 @@ hist(MCMC_Single_Run$ParticleDists)
 hist(MCMC_Single_Run$NearestNeighDists, breaks=50, freq = FALSE)
 hist(MCMC_Single_Run$NParticlesNeighbourhood, breaks=20)
 ```
+
+
+
+
+```{r plot_autocorrelation}
+# --------------------------------------------------------------------------------
+# HYPERPARAMETERS:
+dim   <- 2    # Number of dimensions
+nPart <- 50
+rho   <- 0.1
+
+vol   <- nPart / rho
+nIt   <- 1e6  # Number of iterations
+
+type <- "random"
+
+t     <- 1e+1
+init_config <- gen_initConfig(type=type, dim=dim, vol=vol, nPart=nPart)
+MCMC_BurnIn_Run1 <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, N_burnIn=0, init_config$X0, init_config$q)
+
+t     <- 1e-1 
+init_config <- gen_initConfig(type=type, dim=dim, vol=vol, nPart=nPart)
+MCMC_BurnIn_Run2 <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, N_burnIn=0, init_config$X0, init_config$q)
+
+t     <- 1e-3 
+init_config <- gen_initConfig(type=type, dim=dim, vol=vol, nPart=nPart)
+MCMC_BurnIn_Run3 <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, N_burnIn=0, init_config$X0, init_config$q)
+
+
+# show_particles(MCMC_BurnIn_Run$X, init_config$q, vol)
+rm(dim, rho, vol, t, nPart, init_config, type)
+# --------------------------------------------------------------------------------
+```
+
+```{r}
+nIt <- 2e5
+x.ticks <- c(1e4:nIt)[which(c(1e4:nIt)%%1==0)]
+
+# E1 <- MCMC_BurnIn_Run1$E
+E2 <- MCMC_BurnIn_Run2$E
+E3 <- MCMC_BurnIn_Run3$E
+
+plot(NA, xlim=c(1,2e5), ylim=c(-2,2), xlab="Markov Chain Step", ylab="Energy")
+# lines(x.ticks, E1[x.ticks], col="red")
+lines(x.ticks, E2[x.ticks] - mean(E2[c((nIt-1e5):nIt)]), col="green")
+lines(x.ticks, E3[x.ticks] - mean(E3[c((nIt-1e5):nIt)]), col="blue")
+abline(h=0)
+
+rm(x.ticks)
+```
+
+```{r}
+nInt             <- 2e5
+lag.max          <- 10000
+acf_range <- c((nIt-nInt):nIt)
+
+E1 <- MCMC_BurnIn_Run1$E
+acf1 <- acf(E1[acf_range], lag.max = lag.max, plot=TRUE)
+
+E2 <- MCMC_BurnIn_Run2$E
+acf2 <- acf(E2[acf_range], lag.max = lag.max, plot=TRUE)
+
+E3 <- MCMC_BurnIn_Run3$E
+acf3 <- acf(E3[acf_range], lag.max = lag.max, plot=TRUE)
+
+rm(nInt, acf_range)
+```
+
+```{r}
+x <- c(1:lag.max)[which((c(1:lag.max)-1) %% 100 == 0)]
+y1<- acf1$acf     [which((c(1:lag.max)-1) %% 100 == 0)]
+y2<- acf2$acf     [which((c(1:lag.max)-1) %% 100 == 0)]
+y3<- acf3$acf     [which((c(1:lag.max)-1) %% 100 == 0)]
+
+plot(NA, xlim=c(0,lag.max), ylim=c(-0.45 ,1), xlab="Lag", ylab="ACF")
+lines(x, y1, col="red")
+lines(x, y2, col="green")
+lines(x, y3, col="blue")
+abline(h=0)
+
+
+plot(NA, xlim=c(1,nIt), ylim=c(-30,10), xlab="Markov Chain Step", ylab="Energy")
+lines(x, E1, col="red")
+lines(x, E2, col="green")
+lines(x, E3, col="blue")
+abline(h=0)
+
+rm(x,y1,y2,y3)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

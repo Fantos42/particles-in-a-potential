@@ -53,7 +53,7 @@ double IAT_CPP(NumericVector x){
     for (int i = lg; i < n; i++) Ga[1] += (X[i-lg] - mu) * (X[i] - mu) / (n-lg-1.);
     IAT += Ga[0];
   }
-  Rcout << m*2 << std::endl;
+  Rcout << "Interrupted IAT calculation at dT = " << m*2 << ". Ga[dT] = " << Ga[1] << std::endl;
   //Rcout << "Breakpoint: " << 2*m << std::endl;
   IAT = (-1. + 2. * IAT / Ga0) / 2.;
   return IAT;
@@ -232,13 +232,13 @@ std::vector<int> estimate_Nparticles_neighbourhood(std::vector<std::vector<doubl
 // ========================================= MCMC_CPP
 // =======================================================
 // [[Rcpp::export]]
-Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, NumericMatrix X0, NumericVector q){
+Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, const double N_burnIn, NumericMatrix X0, NumericVector q){
   int d = X0(1,Rcpp::_).size();
   const double l = std::pow(vol, 1./d);
   const double t0= t;
   
-  const double T_burnIn_1 = 1e5;
-  const double T_burnIn_2 = 1e5;
+  const double T_burnIn_1 = N_burnIn * 3./4.;
+  const double T_burnIn_2 = N_burnIn;
   // ----------------------- Observables
   NumericVector dE(nIt, 0.0);
   dE[0] = E_CPP(X0, q);
