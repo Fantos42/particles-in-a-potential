@@ -267,6 +267,8 @@ myMCMCSwipe <- function(dim, nPart=0, rho=0, vol=0, sigma=1, sct="random", nIt=5
   return(df)
 }
 
+
+
 # Error, Fit and Bootstrapping Functions
 getBootstrapMeanError <- function(data, N_replicas=100){
   N <- length(data)
@@ -284,9 +286,9 @@ chisqr <- function(par, x, y, dy){
   return(sum((y-f)**2/dy**2))
 }
 
-myFit <- function(par, x, y, dy){
-  myfit <- optim(par=par, fn=chisqr, y=y, dy=dy, x=x)
-  return(list(a=myfit$par[1], b=myfit$par[2], chi2=myfit$value))
+myFit <- function(par, x, y, dy, fn){
+  myfit <- optim(par=par, fn=fn, y=y, dy=dy, x=x)
+  return(list(par=myfit$par, chi2=myfit$value))
 }
 
 myFitErrors <- function(x, y, dy){

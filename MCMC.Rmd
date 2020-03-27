@@ -14,13 +14,13 @@ source("DataFrameHelper.R")
 ```{r single_simulation}
 # --------------------------------------------------------------------------------
 # HYPERPARAMETERS:
-dim             <- 3    # Number of dimensions
-nPart           <- 40
-rho             <- 0.1
-t               <- 1e-3  # Temperature of heat bath
+dim             <- 2    # Number of dimensions
+nPart           <- 50
+rho             <- 0.01
+t               <- 0.2  # Temperature of heat bath
 
 
-nIt             <- 1e6  # Number of iterations
+nIt             <- 2e6  # Number of iterations
 # nIt             <- 1
 beta            <- 1/t
 
@@ -28,7 +28,7 @@ vol   <- nPart / rho
 l     <- vol**(1/dim)
 # --------------------------------------------------------------------------------
 # Start configuration: (type="ordered" or type="random")
-type <- "random"
+type <- "ordered"
 init_config <- gen_initConfig(type=type, dim=dim, vol=vol, nPart=nPart)
 X0 <- init_config$X0
 q  <- init_config$q
@@ -98,26 +98,26 @@ run_no <- max(resFrame$RUN_ID, na.rm=TRUE)+1
 # HYPERPARAMETERS:
 dim             <- 2
 nPart           <- 50
-rho             <- 0.05
+rho             <- 0.01
 
 nIt             <- 0.5e6
-nResamples      <- 2
+nResamples      <- 3
 
 sct             <- "ordered"
 # --------------------------------------------------------------------------------
 # Betas To Calculate
 x.beta <- exp(log(10)*seq(from=-7, to=7, length.out=71))
-lowerBound <- 1e-3
+lowerBound <- 1e-4
 upperBound <- 1e+4
 
+# x.beta <- x.beta[which(x.beta>=lowerBound)]
+# x.beta <- x.beta[which(x.beta< upperBound)]
 
 # x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
 # x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
 # x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
 # x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
 # x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
-# x.beta <- x.beta[which(x.beta>=lowerBound)]
-# x.beta <- x.beta[which(x.beta< upperBound)]
 # --------------------------------------------------------------------------------
 
 resFrame <- myMCMCSwipe(dim=dim, nPart=nPart, rho=rho, sigma=1, sct=sct, nIt=nIt, nResamples=nResamples, x.beta=x.beta, df=resFrame)
@@ -136,7 +136,7 @@ load(file_name)
 # --------------------------------------------------------------------------------
 dim             <- 2   
 nPart           <- 50
-rho             <- 0.05
+rho             <- 0.01
 vol             <- nPart/rho
 # --------------------------------------------------------------------------------
 x.beta <- myGetBetaValues(dim=dim, vol=vol, rho=rho)
@@ -146,7 +146,8 @@ x.beta <- myGetBetaValues(dim=dim, vol=vol, rho=rho)
 plt.data <- myGetObservables(dim=dim, vol=vol, rho=rho, beta=x.beta)
 rm(x.beta)
 
-myPlotData(1/plt.data$x, plt.data$y.q     , plt.data$y.q_Err     )
+myPlotData(1/plt.data$x[which(plt.data$y.q<4)], plt.data$y.q[which(plt.data$y.q<4)]     , plt.data$y.q_Err     )
+abline(h=1)
 myPlotData(1/plt.data$x, plt.data$y.lambda, plt.data$y.lambda_Err)
 myPlotData(1/plt.data$x, plt.data$y.omega , plt.data$y.omega_Err )
 myPlotData(1/plt.data$x, plt.data$y.kappa , plt.data$y.kappa_Err )
@@ -162,7 +163,7 @@ load(file_name)
 # --------------------------------------------------------------------------------
 dim             <- 2
 nPart           <- 50
-rho             <- 0.05
+rho             <- 0.01
 vol             <- nPart/rho
 # --------------------------------------------------------------------------------
 x.beta <- myGetBetaValues(dim=dim, vol=vol, rho=rho)
@@ -174,8 +175,8 @@ rm(x.beta)
 x <- 1/plt.data$x     
 y1    <- plt.data$y.q         * 0.1
 y1err <- plt.data$y.q_Err     * 0.1
-y2    <- plt.data$y.lambda/sqrt(vol)
-y2err <- plt.data$y.lambda_Err/sqrt(vol)
+y2    <- plt.data$y.lambda    * 0.1
+y2err <- plt.data$y.lambda_Err* 0.1
 y3    <- plt.data$y.omega     * 1.0
 y3err <- plt.data$y.omega_Err * 1.0
 y4    <- plt.data$y.kappa     * 1.0
@@ -188,22 +189,53 @@ ylim <- c(0, max(y1+y1err, y2+y2err, y3+y3err, y4+y4err, na.rm=TRUE))
 log <- "x"
 
 plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log=log, main = "", xlab = "T", ylab = "Value")
-points(x, y1, pch=4, col="black", cex=0.5)
-points(x, y2, pch=4, col="green", cex=0.5)
-points(x, y3, pch=4, col="blue", cex=0.5)
-points(x, y4, pch=4, col="red", cex=0.5)
-lines(x, y1, col="black")
-lines(x, y2, col="green")
-lines(x, y3, col="blue")
-lines(x, y4, col="red")
-arrows(x0=x, y0=y1-y1err, x1=x, y1=y1+y1err, angle=90, code=3, length=0.02, col="black")
-arrows(x0=x, y0=y2-y2err, x1=x, y1=y2+y2err, angle=90, code=3, length=0.02, col="green")
-arrows(x0=x, y0=y3-y3err, x1=x, y1=y3+y3err, angle=90, code=3, length=0.02, col="blue")
-arrows(x0=x, y0=y4-y4err, x1=x, y1=y4+y4err, angle=90, code=3, length=0.02, col="red")
+# points(x, y1, pch=4, col="black", cex=0.5)
+# points(x, y2, pch=4, col="green", cex=0.5)
+# points(x, y3, pch=4, col="blue", cex=0.5)
+# points(x, y4, pch=4, col="red", cex=0.5)
+# lines(x, y1, col="black", lwd=1)
+# lines(x, y2, col="green", lwd=1)
+# lines(x, y3, col="blue" , lwd=1)
+lines(x, y4, col="red"  , lwd=1)
+# arrows(x0=x, y0=y1-y1err, x1=x, y1=y1+y1err, angle=90, code=3, length=0.02, col="black")
+# arrows(x0=x, y0=y2-y2err, x1=x, y1=y2+y2err, angle=90, code=3, length=0.02, col="green")
+# arrows(x0=x, y0=y3-y3err, x1=x, y1=y3+y3err, angle=90, code=3, length=0.02, col="blue")
+# arrows(x0=x, y0=y4-y4err, x1=x, y1=y4+y4err, angle=90, code=3, length=0.02, col="red")
 
 # abline(v=1e-2)
+# abline(v=0.005, lwd=1, col="purple")
+# abline(v=0.015, lwd=1, col="purple")
+# abline(v=0.150, lwd=1, col="purple")
+# abline(v=0.500, lwd=1, col="purple")
 
 legend("topright", legend = c("q", "omega", "kappa"), lty = c(1,1,1), col = c("black", "blue", "red"))
+
+fn <- function(par, x, y, dy) {
+  # par[1]=A1, par[2]=X1, par[3]=A2, par[4]=X2
+  f <- rep(0,length(x))
+  
+  case1 <- which(x <= par[2])
+  case2 <- which(x >  par[2] & x < par[4])
+  case3 <- which(x >= par[4])
+  
+  f[case1] <- par[1]
+  f[case2] <- (par[1] + (log(x[case2]) - log(par[2])) * (par[3]-par[1])/(log(par[4])-log(par[2])))
+  f[case3] <- par[3]    
+  
+  return(sum((y-f)**2/dy**2))
+}
+
+y4err[which(y4err==0)] <- 0.01
+par1     <- c(3, 0.005, 0.1, 0.5)
+par1 <- optim(par=par1, fn=fn, y=y4, dy=y4err, x=x)
+print(par1$par)
+abline(h=par1$par[1], col="red", lwd=2)
+abline(v=par1$par[2], col="red", lwd=2)
+abline(h=par1$par[3], col="red", lwd=2)
+abline(v=par1$par[4], col="red", lwd=2)
+
+lines(x, (par1$par[1] + (log(x) - log(par1$par[2])) * (par1$par[3]-par1$par[1])/(log(par1$par[4])-log(par1$par[2]))), col="purple", lwd=2)
+
 
 rm(resFrame)
 rm(x, xlim, ylim, y1, y1err, y2, y2err, y3, y3err, y4, y4err, log)
@@ -346,9 +378,9 @@ nIt   <- 1e6  # Number of iterations
 
 type <- "random"
 
-t     <- 1e+1
-init_config <- gen_initConfig(type=type, dim=dim, vol=vol, nPart=nPart)
-MCMC_BurnIn_Run1 <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, N_burnIn=0, init_config$X0, init_config$q)
+# t     <- 1e+1
+# init_config <- gen_initConfig(type=type, dim=dim, vol=vol, nPart=nPart)
+# MCMC_BurnIn_Run1 <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, N_burnIn=0, init_config$X0, init_config$q)
 
 t     <- 5e-2 
 init_config <- gen_initConfig(type=type, dim=dim, vol=vol, nPart=nPart)
@@ -382,6 +414,10 @@ lines(x.ticks, E2[x.ticks] - mean(E2[c((nIt-1e5):nIt)]), col="orange")
 lines(x.ticks, E3[x.ticks] - mean(E3[c((nIt-1e5):nIt)]), col="blue")
 abline(h=0)
 # abline(v=nIt)
+
+plot(NA, NA, xlim=c(1,nIt), ylim=c(-22,2), xlab="Markov Chain Step", ylab="Energy", log="")
+lines(x.ticks, E3[x.ticks], col="blue")
+abline(h=0)
 
 rm(x.ticks)
 ```
