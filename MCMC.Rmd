@@ -15,19 +15,20 @@ source("DataFrameHelper.R")
 # --------------------------------------------------------------------------------
 # HYPERPARAMETERS:
 dim             <- 2    # Number of dimensions
-nPart           <- 50
+nPart           <- 40
 rho             <- 0.1
-beta            <- 1e3
+t               <- 1e-3  # Temperature of heat bath
 
-nIt             <- 0.2e6  # Number of iterations
+
+nIt             <- 2e6  # Number of iterations
 # nIt             <- 1
+beta            <- 1/t
 
-t     <- 1/beta # Temperature of heat bath
 vol   <- nPart / rho
 l     <- vol**(1/dim)
 # --------------------------------------------------------------------------------
 # Start configuration: (type="ordered" or type="random")
-type <- "random"
+type <- "ordered"
 init_config <- gen_initConfig(type=type, dim=dim, vol=vol, nPart=nPart)
 X0 <- init_config$X0
 q  <- init_config$q
@@ -82,50 +83,53 @@ rm(nIt)
 ```
 
 ```{r}
-# myCreateNewFrame("MCMC_Results_V7_randStart.RData")
+# myCreateNewFrame("MCMC_Results_V8.RData")
 
-myShowContentOverview("MCMC_Results_V7_randStart.RData")
+myShowContentOverview("MCMC_Results_V8.RData")
 ```
 
 ```{r MCMC_Swipe}
 # --------------------------------------------------------------------------------
 # LOAD RESULTS DATA FRAME FROM DISK
-file_name <- "MCMC_Results_V7_randStart.RData"
+file_name <- "MCMC_Results_V8.RData"
 load(file_name)
 run_no <- max(resFrame$RUN_ID, na.rm=TRUE)+1
 # --------------------------------------------------------------------------------
 # HYPERPARAMETERS:
-dim             <- 2   
-nPart           <- 50
+dim             <- 2
+nPart           <- 49
 rho             <- 0.1
 
-nIt             <- 0.5e6
-nResamples      <- 7
+nIt             <- 2e6
+nResamples      <- 3
 # --------------------------------------------------------------------------------
 # Betas To Calculate
 x.beta <- exp(log(10)*seq(from=-7, to=7, length.out=71))
+lowerBound <- 1e-5
+upperBound <- 1e+5
 
+
+x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
 x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
 # x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
 # x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
 # x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
-# x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
-# x.beta <- x.beta[which(x.beta>=1e1)]
-# x.beta <- x.beta[which(x.beta< 1e1)]
+# x.beta <- x.beta[which(x.beta>=lowerBound)]
+# x.beta <- x.beta[which(x.beta< upperBound)]
 # --------------------------------------------------------------------------------
 
-resFrame <- myMCMCSwipe(dim=dim, nPart=nPart, rho=rho, nIt=nIt, nResamples=nResamples, x.beta=x.beta, df=resFrame)
+resFrame <- myMCMCSwipe(dim=dim, nPart=nPart, rho=rho, sigma=1, sct="random", nIt=nIt, nResamples=nResamples, x.beta=x.beta, df=resFrame)
 
 save(resFrame, file=file_name)
 rm(resFrame)
 
-rm(file_name, run_no, dim, nPart, rho, nIt, nResamples, x.beta)
+rm(file_name, run_no, dim, nPart, rho, nIt, nResamples, x.beta, lowerBound, upperBound)
 ```
 
 
 ```{r plot_orderParam}
 source("DataFrameHelper.R")
-file_name <- "MCMC_Results_V7_randStart.RData"
+file_name <- "MCMC_Results_V8.RData"
 load(file_name)
 # --------------------------------------------------------------------------------
 dim             <- 2   
@@ -151,11 +155,11 @@ rm(plt.data, dim, rho, vol, file_name)
 
 ```{r plots}
 source("DataFrameHelper.R")
-file_name <- "MCMC_Results_V7_randStart.RData"
+file_name <- "MCMC_Results_V8.RData"
 load(file_name)
 # --------------------------------------------------------------------------------
-dim             <- 2   
-nPart           <- 50
+dim             <- 2
+nPart           <- 40
 rho             <- 0.1
 vol             <- nPart/rho
 # --------------------------------------------------------------------------------
@@ -166,44 +170,47 @@ rm(x.beta)
 
 #plot custom
 x <- 1/plt.data$x     
-y1 <- plt.data$y.q/10
-y1err <- plt.data$y.q_Err/10
-y2 <- plt.data$y.lambda/sqrt(vol)
+y1    <- plt.data$y.q         * 0.1
+y1err <- plt.data$y.q_Err     * 0.1
+y2    <- plt.data$y.lambda/sqrt(vol)
 y2err <- plt.data$y.lambda_Err/sqrt(vol)
-y3 <- plt.data$y.omega
-y3err <- plt.data$y.omega_Err
-y4 <- plt.data$y.kappa
-y4err <- plt.data$y.kappa_Err
+y3    <- plt.data$y.omega     * 1.0
+y3err <- plt.data$y.omega_Err * 1.0
+y4    <- plt.data$y.kappa     * 1.0
+y4err <- plt.data$y.kappa_Err * 1.0
 
 
-xlim <- c(1e-3, 1e4)
+xlim <- c(1e-7, 1e7)
 ylim <- c(0, max(y1+y1err, y2+y2err, y3+y3err, y4+y4err, na.rm=TRUE))
 
 log <- "x"
 
-plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log=log, main = "Observables vs. Temperature", xlab = "T", ylab = "Value")
-points(x, y1, pch=4, col="black", cex=0.5)
-points(x, y2, pch=4, col="green", cex=0.5)
-points(x, y3, pch=4, col="blue", cex=0.5)
-points(x, y4, pch=4, col="red", cex=0.5)
+plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log=log, main = "", xlab = "T", ylab = "Value")
+# points(x, y1, pch=4, col="black", cex=0.5)
+# # points(x, y2, pch=4, col="green", cex=0.5)
+# points(x, y3, pch=4, col="blue", cex=0.5)
+# points(x, y4, pch=4, col="red", cex=0.5)
 lines(x, y1, col="black")
-lines(x, y2, col="green")
+# lines(x, y2, col="green")
 lines(x, y3, col="blue")
 lines(x, y4, col="red")
-arrows(x0=x, y0=y1-y1err, x1=x, y1=y1+y1err, angle=90, code=3, length=0.02)
-arrows(x0=x, y0=y2-y2err, x1=x, y1=y2+y2err, angle=90, code=3, length=0.02)
-arrows(x0=x, y0=y3-y3err, x1=x, y1=y3+y3err, angle=90, code=3, length=0.02)
-arrows(x0=x, y0=y4-y4err, x1=x, y1=y4+y4err, angle=90, code=3, length=0.02)
+arrows(x0=x, y0=y1-y1err, x1=x, y1=y1+y1err, angle=90, code=3, length=0.02, col="black")
+# arrows(x0=x, y0=y2-y2err, x1=x, y1=y2+y2err, angle=90, code=3, length=0.02, col="green")
+arrows(x0=x, y0=y3-y3err, x1=x, y1=y3+y3err, angle=90, code=3, length=0.02, col="blue")
+arrows(x0=x, y0=y4-y4err, x1=x, y1=y4+y4err, angle=90, code=3, length=0.02, col="red")
 
-# legend("topright", legend = c("q", "lambda", "omega", "kappa"), lty = c(1,1,1,1), col = c("black", "green", "blue", "red"))
+abline(v=1e-2)
+
+legend("topright", legend = c("q", "omega", "kappa"), lty = c(1,1,1), col = c("black", "blue", "red"))
 
 rm(resFrame)
-rm(plt.data, dim, rho, vol, file_name)
+rm(x, xlim, ylim, y1, y1err, y2, y2err, y3, y3err, y4, y4err, log)
+rm(plt.data, dim, rho, vol, nPart, file_name)
 ```
 
 ```{r plot_orderParam}
 source("DataFrameHelper.R")
-file_name <- "MCMC_Results_V7_randStart.RData"
+file_name <- "MCMC_Results_V8.RData"
 load(file_name)
 # --------------------------------------------------------------------------------
 dim             <- 2   
@@ -341,7 +348,7 @@ t     <- 1e+1
 init_config <- gen_initConfig(type=type, dim=dim, vol=vol, nPart=nPart)
 MCMC_BurnIn_Run1 <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, N_burnIn=0, init_config$X0, init_config$q)
 
-t     <- 1e-1 
+t     <- 5e-2 
 init_config <- gen_initConfig(type=type, dim=dim, vol=vol, nPart=nPart)
 MCMC_BurnIn_Run2 <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, N_burnIn=0, init_config$X0, init_config$q)
 
@@ -356,18 +363,23 @@ rm(dim, rho, vol, t, nPart, init_config, type)
 ```
 
 ```{r}
-nIt <- 2e5
-x.ticks <- c(1e4:nIt)[which(c(1e4:nIt)%%1==0)]
+nIt <- 8.5e5
+x.ticks <- c(1e0:nIt)[which(c(1e4:nIt)%%500==0)]
 
 # E1 <- MCMC_BurnIn_Run1$E
 E2 <- MCMC_BurnIn_Run2$E
 E3 <- MCMC_BurnIn_Run3$E
 
-plot(NA, xlim=c(1,2e5), ylim=c(-2,2), xlab="Markov Chain Step", ylab="Energy")
+plot(NA, NA, xlim=c(1,nIt), ylim=c(0.001,5), xlab="Markov Chain Step", ylab="Energy", log="y")
 # lines(x.ticks, E1[x.ticks], col="red")
-lines(x.ticks, E2[x.ticks] - mean(E2[c((nIt-1e5):nIt)]), col="green")
+lines(x.ticks, E2[x.ticks] - min(E2[x.ticks]), col="orange")
+lines(x.ticks, E3[x.ticks] - min(E3[x.ticks]), col="blue")
+
+plot(NA, NA, xlim=c(1,nIt), ylim=c(-1,2), xlab="Markov Chain Step", ylab="Energy", log="")
+lines(x.ticks, E2[x.ticks] - mean(E2[c((nIt-1e5):nIt)]), col="orange")
 lines(x.ticks, E3[x.ticks] - mean(E3[c((nIt-1e5):nIt)]), col="blue")
 abline(h=0)
+# abline(v=nIt)
 
 rm(x.ticks)
 ```

@@ -46,6 +46,7 @@ myShowContentOverview <- function(file_name) {
   cat("This file contains the following parameter sets:\n")
   if (length(resFrame$RUN_ID)==1) {
     cat("File empty.\n")
+    return()
   }
   cat("\t d \t vol \t rho \t beta \t N_beta \t N_samples\n")
   v.dims <- resFrame$dim
@@ -118,7 +119,7 @@ myGetObservables <- function(dim, vol, rho, beta) {
     
       qs <- numeric(0)
       for (j in c(1:length(idx))) {
-        qs <- c(qs, resFrame$q[[idx[j]]])
+        qs <- c(qs, max(resFrame$q[[idx[j]]]))
       }
       y.q[i,1] <- mean(qs)
       # y.q[i,2] <- sqrt(var(qs))
@@ -127,7 +128,7 @@ myGetObservables <- function(dim, vol, rho, beta) {
       
       omegas <- numeric(0)
       for (j in c(1:length(idx))) {
-        omegas <- c(omegas, resFrame$omega[[idx[j]]])
+        omegas <- c(omegas, mean(resFrame$omega[[idx[j]]]))
       }
       y.omega[i,1] <- mean(omegas)
       # y.omega[i,2] <- sqrt(var(omegas))
@@ -138,7 +139,7 @@ myGetObservables <- function(dim, vol, rho, beta) {
       
       lambdas <- numeric(0)
       for (j in c(1:length(idx))) {
-        lambdas <- c(lambdas, resFrame$lambda[[idx[j]]])
+        lambdas <- c(lambdas, mean(resFrame$lambda[[idx[j]]]))
       }
       y.lambda[i,1] <- mean(lambdas)
       y.lambda[i,2] <- sqrt(var(lambdas) / length(lambdas))
@@ -149,7 +150,7 @@ myGetObservables <- function(dim, vol, rho, beta) {
       
       kappas <- numeric(0)
       for (j in c(1:length(idx))) {
-        kappas <- c(kappas, resFrame$kappa[[idx[j]]])
+        kappas <- c(kappas, mean(resFrame$kappa[[idx[j]]]))
       }
       y.kappa[i,1] <- mean(kappas)
       y.kappa[i,2] <- sqrt(var(kappas) / length(kappas))
