@@ -119,7 +119,7 @@ myGetObservables <- function(dim, vol, rho, beta) {
     
       qs <- numeric(0)
       for (j in c(1:length(idx))) {
-        qs <- c(qs, max(resFrame$q[[idx[j]]]))
+        qs <- c(qs, mean(resFrame$q[[idx[j]]]))
       }
       y.q[i,1] <- mean(qs)
       # y.q[i,2] <- sqrt(var(qs))
