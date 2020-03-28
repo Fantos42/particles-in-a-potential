@@ -160,6 +160,9 @@ rm(plt.data, dim, rho, vol, file_name)
 source("DataFrameHelper.R")
 file_name <- "MCMC_Results_V8.RData"
 load(file_name)
+
+# options(warn=-1)
+# options(warn=0)
 # --------------------------------------------------------------------------------
 dim             <- 2
 nPart           <- 50
@@ -184,23 +187,28 @@ y4err <- plt.data$y.kappa_Err * 1.0
 
 
 xlim <- c(1e-5, 1e5)
+xlim <- c(1e-3, 1e1)
 ylim <- c(0, max(y1+y1err, y2+y2err, y3+y3err, y4+y4err, na.rm=TRUE))
 
 log <- "x"
 
 plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log=log, main = "", xlab = "T", ylab = "Value")
-# points(x, y1, pch=4, col="black", cex=0.5)
-# points(x, y2, pch=4, col="green", cex=0.5)
-# points(x, y3, pch=4, col="blue", cex=0.5)
-# points(x, y4, pch=4, col="red", cex=0.5)
-# lines(x, y1, col="black", lwd=1)
-# lines(x, y2, col="green", lwd=1)
-# lines(x, y3, col="blue" , lwd=1)
+#q
+points(x, y1, pch=4, col="black", cex=0.5)
+lines(x, y1, col="black", lwd=1)
+arrows(x0=x, y0=y1-y1err, x1=x, y1=y1+y1err, angle=90, code=3, length=0.02, col="black")
+#lambda
+points(x, y2, pch=4, col="green", cex=0.5)
+lines(x, y2, col="green", lwd=1)
+arrows(x0=x, y0=y2-y2err, x1=x, y1=y2+y2err, angle=90, code=3, length=0.02, col="green")
+#omega
+points(x, y3, pch=4, col="blue", cex=0.5)
+lines(x, y3, col="blue" , lwd=1)
+arrows(x0=x, y0=y3-y3err, x1=x, y1=y3+y3err, angle=90, code=3, length=0.02, col="blue")
+#kappa
+points(x, y4, pch=4, col="red", cex=0.5)
 lines(x, y4, col="red"  , lwd=1)
-# arrows(x0=x, y0=y1-y1err, x1=x, y1=y1+y1err, angle=90, code=3, length=0.02, col="black")
-# arrows(x0=x, y0=y2-y2err, x1=x, y1=y2+y2err, angle=90, code=3, length=0.02, col="green")
-# arrows(x0=x, y0=y3-y3err, x1=x, y1=y3+y3err, angle=90, code=3, length=0.02, col="blue")
-# arrows(x0=x, y0=y4-y4err, x1=x, y1=y4+y4err, angle=90, code=3, length=0.02, col="red")
+arrows(x0=x, y0=y4-y4err, x1=x, y1=y4+y4err, angle=90, code=3, length=0.02, col="red")
 
 # abline(v=1e-2)
 # abline(v=0.005, lwd=1, col="purple")
@@ -208,7 +216,11 @@ lines(x, y4, col="red"  , lwd=1)
 # abline(v=0.150, lwd=1, col="purple")
 # abline(v=0.500, lwd=1, col="purple")
 
-legend("topright", legend = c("q", "omega", "kappa"), lty = c(1,1,1), col = c("black", "blue", "red"))
+# axis(1, at=axTicks(1), labels=paste(formatC(axTicks(1)/1000, format = 'd', 'kb')))
+
+legend("topright", legend = c("q", expression(lambda), expression(omega), expression(kappa)), lty = c(1,1,1,1), col = c("black", "green", "blue", "red"))
+
+#custom fit
 
 fn <- function(par, x, y, dy) {
   # par[1]=A1, par[2]=X1, par[3]=A2, par[4]=X2
@@ -225,17 +237,98 @@ fn <- function(par, x, y, dy) {
   return(sum((y-f)**2/dy**2))
 }
 
-y4err[which(y4err==0)] <- 0.01
-par1     <- c(3, 0.005, 0.1, 0.5)
-par1 <- optim(par=par1, fn=fn, y=y4, dy=y4err, x=x)
-print(par1$par)
-abline(h=par1$par[1], col="red", lwd=2)
-abline(v=par1$par[2], col="red", lwd=2)
-abline(h=par1$par[3], col="red", lwd=2)
-abline(v=par1$par[4], col="red", lwd=2)
+fitOrderParams <- function(par, x, y, dy){
+  dy[which(dy==0)] <- 0.01
+  dof <- length(y)-length(par)
+  res <- optim(par=par, fn=fn, y=y, dy=dy, x=x)
+  return(list(par=res$par, chi2=res$value, pval = 1-pchisq(q=res$value, df = dof)))
+}
 
-lines(x, (par1$par[1] + (log(x) - log(par1$par[2])) * (par1$par[3]-par1$par[1])/(log(par1$par[4])-log(par1$par[2]))), col="purple", lwd=2)
+plotlin <- function(par, x){
+  f <- (par[1] + (log(x) - log(par[2])) * (par[3]-par[1])/(log(par[4])-log(par[2])))
+  return(f)
+}
 
+getErrorsOfFit <- function(par, x, y, dy){
+  N <- length(y)
+  dy[which(dy==0)] <- 0.01
+  N_replicas <- 50
+  replicas <- array(data = NA, dim = c(N_replicas, N))
+  for (i in c(1:N)) {
+    replicas[ ,i] <- rnorm(n = N_replicas, mean=y[i], sd=dy[i])
+  }
+  #calculate best fit values (minimise chi2)
+  best_par <- array(data = NA, dim = c(N_replicas, length(par)+1))
+  for (j in c(1:N_replicas)) {
+    myfit <- optim(par = par, fn =fn, x=x, y=replicas[j, ], dy=dy)
+    best_par[j, c(1:length(par))] <- myfit$par
+    best_par[j, length(par)+1] <- myfit$value
+  }  
+  
+  errors <- list(A1err=sd(best_par[ , 1]), X1err=sd(best_par[ ,2]), A2err=sd(best_par[ ,3]), X2err=sd(best_par[ ,4]), chi2err=sd(best_par[5]))
+  return(errors)
+}
+
+#fit to q:
+id <- which(x > 1e-3 &  x < 1e3)
+startparam1 <- c(3, 0.005, 0.1, 0.5)
+par1    <- fitOrderParams(startparam1, x, y1, y1err)
+par1err <- getErrorsOfFit(startparam1, x, y1, y1err)
+# abline(h=par1$par[1], col="purple", lwd=2)
+abline(v=par1$par[2], col="black", lwd=2)
+# abline(h=par1$par[3], col="purple", lwd=2)
+abline(v=par1$par[4], col="black", lwd=2)
+# lines(x, plotlin(par1$par, x), col="purple", lwd=2)
+cat("Fit to q: ")
+cat("A1:    ", par1$par[1], " +- " , par1err$A1err, "\n")
+cat("x1:    ", par1$par[2], " +- " , par1err$X1err, "\n")
+cat("A2:    ", par1$par[3], " +- " , par1err$A2err, "\n")
+cat("x2:    ", par1$par[4], " +- " , par1err$X2err, "\n")
+cat("Chi^2: ", par1$chi2  , " +- " , par1err$chi2err,  " , p-value: ", par1$pval, "\n")
+
+#fit to lambda:
+id <- which(x > 1e-3 &  x < 1e3)
+startparam2 <- c(0.5, 0.005, 3, 0.5)
+par2    <- fitOrderParams(startparam2, x[id], y2[id], y2err[id])
+par2err <- getErrorsOfFit(startparam2, x, y2, y2err)
+# abline(h=par2$par[1], col="purple", lwd=2)
+abline(v=par2$par[2], col="green", lwd=2)
+# abline(h=par2$par[3], col="purple", lwd=2)
+abline(v=par2$par[4], col="green", lwd=2)
+# lines(x, plotlin(par2$par, x), col="purple", lwd=2)
+cat("Fit to lambda: ")
+cat("A1:    ", par2$par[1], " +- " , par2err$A1err, "\n")
+cat("x1:    ", par2$par[2], " +- " , par2err$X1err, "\n")
+cat("A2:    ", par2$par[3], " +- " , par2err$A2err, "\n")
+cat("x2:    ", par2$par[4], " +- " , par2err$X2err, "\n")
+cat("Chi^2: ", par2$chi2  , " +- " , par2err$chi2err,  " , p-value: ", par2$pval, "\n")
+
+#fit to omega:
+# id <- which(x > 1e-3 &  x < 1e3)
+# par3 <- fitOrderParams(c(1, 0.005, 1, 0.42), x, y3, y3err)
+# abline(h=par3$par[1], col="purple", lwd=2)
+# abline(v=par3$par[2], col="blue", lwd=2)
+# abline(h=par3$par[3], col="purple", lwd=2)
+# abline(v=par3$par[4], col="blue", lwd=2)
+# lines(x, plotlin(par3$par, x), col="purple", lwd=2)
+# cat("Fit to omega: ", "A1: ", par3$par[1], "\n",  "x1: ", par3$par[2], "\n", "A2: ", par3$par[3], "\n", "x2: ", par3$par[4], "\n" ,
+#          "Chi^2: ", par3$chi2, " , p-value: ", par3$pval, "\n")
+
+#fit to kappa:
+startparam4 <- c(3, 0.005, 0.1, 0.5)
+par4    <- fitOrderParams(startparam4, x, y4, y4err)
+par4err <- getErrorsOfFit(startparam4, x, y4, y4err)
+# abline(h=par4$par[1], col="purple", lwd=2)
+abline(v=par4$par[2], col="red", lwd=2)
+# abline(h=par4$par[3], col="purple", lwd=2)
+abline(v=par4$par[4], col="red", lwd=2)
+# lines(x, plotlin(par4$par, x), col="purple", lwd=2)
+cat("Fit to kappa: ")
+cat("A1:    ", par4$par[1], " +- " , par4err$A1err, "\n")
+cat("x1:    ", par4$par[2], " +- " , par4err$X1err, "\n")
+cat("A2:    ", par4$par[3], " +- " , par4err$A2err, "\n")
+cat("x2:    ", par4$par[4], " +- " , par4err$X2err, "\n")
+cat("Chi^2: ", par4$chi2  , " +- " , par4err$chi2err,  " , p-value: ", par4$pval, "\n")
 
 rm(resFrame)
 rm(x, xlim, ylim, y1, y1err, y2, y2err, y3, y3err, y4, y4err, log)
