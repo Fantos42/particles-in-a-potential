@@ -101,28 +101,29 @@ nPart           <- 50
 rho             <- 0.02
 
 nIt             <- 0.5e6
-nResamples      <- 10
+nResamples      <- 2
 
 sct             <- "ordered"
 # --------------------------------------------------------------------------------
 # Betas To Calculate
-x.beta <- exp(log(10)*seq(from=-7, to=7, by=0.2))
-x.beta <- c(x.beta,1/exp(log(10)*seq(from=-2.1, to=-0.3, by=0.05))) # More detail in transition region
-x.beta <- x.beta[!duplicated(x.beta)]
-x.beta <- sort(x.beta)
-
+x.T <- exp(log(10)*seq(from=-7, to=7, by=0.2))
+x.T <- c(x.T, exp(log(10)*seq(from=-2.1, to=-0.3, by=0.05))) # More detail in transition region
 
 lowerBound <- 1e-2
 upperBound <- 1e-1
+x.T <- x.T[which(x.T>=lowerBound)]
+x.T <- x.T[which(x.T< upperBound)]
+x.T <- sort(x.T)
 
-x.beta <- x.beta[which(x.beta>=lowerBound)]
-x.beta <- x.beta[which(x.beta< upperBound)]
+x.T <- x.T[!duplicated(round(x.T,8))]
 
-# x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
-# x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
-# x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
-# x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
-# x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
+# x.T <- x.T[which(c(1:length(x.T))%%2==0)]
+# x.T <- x.T[which(c(1:length(x.T))%%2==0)]
+# x.T <- x.T[which(c(1:length(x.T))%%2==0)]
+# x.T <- x.T[which(c(1:length(x.T))%%2==0)]
+# x.T <- x.T[which(c(1:length(x.T))%%2==0)]
+
+x.beta <- 1/x.T
 # --------------------------------------------------------------------------------
 
 resFrame <- myMCMCSwipe(dim=dim, nPart=nPart, rho=rho, sigma=1, sct=sct, nIt=nIt, nResamples=nResamples, x.beta=x.beta, df=resFrame)
@@ -130,7 +131,7 @@ resFrame <- myMCMCSwipe(dim=dim, nPart=nPart, rho=rho, sigma=1, sct=sct, nIt=nIt
 save(resFrame, file=file_name)
 rm(resFrame)
 
-rm(file_name, run_no, dim, nPart, rho, nIt, nResamples, x.beta, lowerBound, upperBound)
+rm(file_name, run_no, dim, nPart, rho, nIt, nResamples, x.beta, x.T, lowerBound, upperBound)
 ```
 
 
@@ -191,9 +192,10 @@ y4err <- plt.data$y.kappa_Err * 1.0
 
 
 xlim <- c(1e-5, 1e5)
-xlim <- c(5e-3, 5e-1)
+xlim <- c(1e-3, 1e0)
 ylim <- c(0, max(y1+y1err, y2+y2err, y3+y3err, y4+y4err, na.rm=TRUE))
 
+pdf("plot.pdf", width = 11, height = 7)
 plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log="x", main = "", xlab = "T", ylab = "Value")
 # axis(1, at=axTicks(1), labels=paste(formatC(axTicks(1)/1000, format = 'd', 'kb')))
 
@@ -226,7 +228,7 @@ fit.draw(pars2$par, x=x, col="green", lines=TRUE, vlines=FALSE)
 # pars3 <- fit.automaticRoutine(startparam=c(0.5, 0.005, 3, 0.5), x=x, y=y3, dy=y3err, xrange=c(1e-3,1e3), fn=chisqr_PiecewiseLinAndExpFunction)
 # fit.draw(pars3$par, x=x, col="blue", lines=FALSE, vlines=FALSE)
 
-#fit to kappa:
+# #fit to kappa:
 pars4 <- fit.automaticRoutine(startparam=c(3, 0.005, 0.1, 0.5), x=x, y=y4, dy=y4err, xrange=c(1e-3,1e3), fn=chisqr_PiecewiseLinAndExpFunction)
 fit.draw(pars4$par, x=x, col="red", lines=TRUE, vlines=FALSE)
 
@@ -244,11 +246,28 @@ print_fitRes("lambda",pars2$par, pars2$parerr)
 print_fitRes("kappa",pars4$par, pars4$parerr)
 rm(print_fitRes)
 
+
 rm(resFrame)
 rm(x, xlim, ylim, y1, y1err, y2, y2err, y3, y3err, y4, y4err)
 rm(plt.data, dim, rho, vol, nPart, file_name)
 rm(pars1)
+
+dev.off()
 ```
+```{r logistic_curve}
+x <- exp(log(10)*seq(from=-3, to=0, by=0.2))
+
+logistic <- function(par, x) {
+  return(par[1] / (1 + exp(-par[2] * (par[3]-x))))
+}
+
+y <- logistic(c(5, 500, 0.020), x)
+
+plot(x,y, type="b", log = "x")
+
+```
+
+
 
 ```{r plot_orderParam}
 source("DataFrameHelper.R")

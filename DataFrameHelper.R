@@ -200,9 +200,10 @@ myMCMCSwipe <- function(dim, nPart=0, rho=0, vol=0, sigma=1, sct="random", nIt=5
   else if (vol == 0 & rho!=0 & nPart!=0) vol <- nPart / rho
   
   l     <- vol**(1/dim)
+  watch.records <- rep(NA, length(x.beta)) 
   
   for (i in c(1:length(x.beta))) {
-    cat("i:",i,", ",log10(x.beta[i]),"\t : ")
+    cat("i:",i,"\t, ",log10(x.beta[i]),"   \t : ")
     
     watch.iter <- Sys.time()
     for (j in c(1:nResamples)) {
@@ -245,8 +246,8 @@ myMCMCSwipe <- function(dim, nPart=0, rho=0, vol=0, sigma=1, sct="random", nIt=5
       )
       # - - - - - - - - - 
     }
-    watch.iter <- as.double(Sys.time() - watch.iter, units='secs')
-    cat("dur/stp:",watch.iter/nResamples,"\n")
+    watch.records[i] <- as.double(Sys.time() - watch.iter, units='mins') / nResamples
+    cat("ETA= ",round(mean(watch.records, na.rm=TRUE)*(length(x.beta)-i) , 2)," minutes \n")
   }
   
   return(df)
@@ -333,11 +334,14 @@ fit.getErrors <- function(par, x, y, dy, fn){
   best_par <- array(data = NA, dim = c(N_replicas, length(par)+1))
   for (j in c(1:N_replicas)) {
     myfit <- optim(par = par, fn=fn, x=x, y=replicas[j, ], dy=dy)
+    # cat(myfit$value, "\n")
     best_par[j, c(1:length(par))] <- myfit$par
     best_par[j, length(par)+1] <- myfit$value
+    # cat(best_par[j, length(par)+1], "\n")
   }  
+  # print(sd(best_par[ ,5]))
   
-  errors <- list(A1err=sd(best_par[ , 1]), X1err=sd(best_par[ ,2]), A2err=sd(best_par[ ,3]), X2err=sd(best_par[ ,4]), chi2err=sd(best_par[5]))
+  errors <- list(A1err=sd(best_par[ , 1]), X1err=sd(best_par[ ,2]), A2err=sd(best_par[ ,3]), X2err=sd(best_par[ ,4]), chi2err=sd(best_par[ ,5]))
   return(errors)
 }
 
@@ -350,8 +354,8 @@ fit.automaticRoutine <- function(startparam, x, y, dy, xrange, fn) {
 
 fit.draw <- function(par, x, col="black", vlines=TRUE, lines=TRUE) {
   if (vlines==TRUE) {
-    abline(v=par$par[2], col=col, lwd=2)
-    abline(v=par$par[4], col=col, lwd=2)
+    abline(v=par$par[2], col=col, lwd=1)
+    abline(v=par$par[4], col=col, lwd=1)
   }
   if (lines==TRUE) {
     case1 <- which(x <= par$par[2])
@@ -363,7 +367,7 @@ fit.draw <- function(par, x, col="black", vlines=TRUE, lines=TRUE) {
     f[case2] <- (par$par[1] + (log(x[case2]) - log(par$par[2])) * (par$par[3]-par$par[1])/(log(par$par[4])-log(par$par[2])))
     f[case3] <- par$par[3]
     
-    lines(x, f, col=col, lwd=2)
+    lines(x, f, col=col, lwd=1)
   }
 }
 
