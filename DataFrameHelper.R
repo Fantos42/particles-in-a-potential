@@ -247,7 +247,7 @@ myMCMCSwipe <- function(dim, nPart=0, rho=0, vol=0, sigma=1, sct="random", nIt=5
       # - - - - - - - - - 
     }
     watch.records[i] <- as.double(Sys.time() - watch.iter, units='mins') / nResamples
-    cat("ETA= ",round(mean(watch.records, na.rm=TRUE)*(length(x.beta)-i) , 2)," minutes \n")
+    cat("ETA= ",round(mean(watch.records[c(max(c(1,i-10)),i)])*(length(x.beta)-i) , 2)," minutes \n")
   }
   
   return(df)

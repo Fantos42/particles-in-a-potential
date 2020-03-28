@@ -78,6 +78,8 @@ show_particles <- function(x, q, V){
       # title="Scatterplot", 
       # caption = "Source: midwest")
     
+    gg <- gg + labs(x = "x-axis", y = "y-axis")
+    
     plot(gg)
     
   } else if (dim == 3) {
@@ -98,7 +100,7 @@ gen_initConfig <- function(type="random", dim, vol, nPart, lc=1.5) {
   }
   
   X0 <- numeric(0)
-  q  <- numeric(0)
+  q  <- rep(1,nPart)
   
   l <- vol**(1./dim)
   
@@ -113,17 +115,41 @@ gen_initConfig <- function(type="random", dim, vol, nPart, lc=1.5) {
     X0 <- array(data = NA, dim = c(nPart, dim))
     nRow  <- ceiling(nPart**(1./dim))
     nCol  <- round  (nPart**(1./dim))
-
+    
     offset <- l / 2 * (1 - 1/nCol) - l / 4
-
-    for (iterator in c(1:nPart)) {
-      X0[iterator,1] <- (floor((iterator-1) / nCol)) * lc - offset
-      X0[iterator,2] <- ((iterator-1) %% nCol      ) * lc - offset
+    
+    # 1 Dimension:
+    if (dim==1) {
+      for (i in c(1:nPart)) {
+        X0[i,1] <- (i-1) * lc - offset
+      }
+    } else if (dim == 2) {
+      # 2 Dimensions:
+      for (i in c(1:nPart)) {
+        X0[i,1] <- (floor((i-1) / nCol)) * lc - offset
+        X0[i,2] <- ((i-1) %% nCol      ) * lc - offset
+      }
+    } else if (dim == 3) {
+      for (i in c(1:nPart)) {
+        a <- floor( (i-1)                         / nRow/nCol)
+        b <- floor(((i-1)         - a*nCol*nRow)  / nCol     )
+        c <-       ((i-1)- b*nCol - a*nCol*nRow) %% nCol
+        
+        X0[i,1] <- a * lc - offset
+        X0[i,2] <- b * lc - offset
+        X0[i,3] <- c * lc - offset
+        
+        q[i] <- (-1)**(a+b+c)
+      }
     }
     
-    q <- rep(1, nPart)
-    for (iterator in c(2:nPart)) {
-      q[iterator] <- q[iterator-1]*-1
+    # 3 Dimensions:
+    
+    
+    if (dim==1 | dim==2) {
+      for (iterator in c(2:nPart)) {
+        q[iterator] <- q[iterator-1]*-1
+      }
     }
   }
   
