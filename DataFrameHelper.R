@@ -171,40 +171,25 @@ myGetObservables <- function(dim, vol, rho, beta) {
          )
 }
 
-myPlotData <- function(x, y, yerr) {
-  # x    <- x   [which(!is.na(y))]
-  # yerr <- yerr[which(!is.na(y))]
-  # y    <- y   [which(!is.na(y))]
-  
+myPlotData <- function(x, y, dy) {
   xlim <- c(1e-7, 1e7)
-  # xlim <- c(1e-3, max(x.beta,na.rm=TRUE)+1)
-  ylim <- c(0, max(y+yerr,na.rm=TRUE))
-  # ylim <- c(0,10)
-  
-  # yerr[which(yerr < 0.1e0)] <- NA
-  err_low <- y - yerr
-  err_high<- y + yerr
-  
-  log <- "x"
-  
-  plot(x, y, xlim=xlim, ylim=ylim, type = "l", log=log)
-  points(x, y, pch=4, col="black", cex=0.5)
-  arrows(x0=x, y0=err_low, x1=x, y1=err_high, angle=90, code=3, length=0.02)
+  xlim <- c(1e-3, 1e0)
+  ylim <- c(0, max(y+dy,na.rm=TRUE))
+  plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log="x")
+  draw.DataWithError(x=x, y=y, dy=dy, col="black", bars=TRUE, points=TRUE, lines=TRUE)
 }
 
-myPointsLinesErrorsData <- function(x, y, yerr, col="black") {
-  # x    <- x   [which(!is.na(y))]
-  # yerr <- yerr[which(!is.na(y))]
-  # y    <- y   [which(!is.na(y))]
+draw.DataWithError <- function(x, y, dy, col="black", bars=TRUE, points=TRUE, lines=TRUE) {
+  units = par(c('usr', 'pin'))
+  x_to_inches = with(units, pin[1L]/diff(usr[1:2]))
+  y_to_inches = with(units, pin[2L]/diff(usr[3:4]))
   
-  # yerr[which(yerr < 0.1e0)] <- NA
+  dists = sqrt((x_to_inches * dy)**2) 
+  id_validArrow = which(dists > .0025)
   
-  err_low  <- y - yerr
-  err_high <- y + yerr
-  
-  lines (x, y, col=col)
-  points(x, y, pch=4, col=col, cex=0.5)
-  arrows(x0=x, y0=err_low, x1=x, y1=err_high, angle=90, code=3, length=0.02, col=col)
+  if (bars==TRUE)  points(x, y, pch=4, col=col, cex=0.5)
+  if (lines==TRUE) lines(x, y, col=col, lwd=1)
+  if (bars==TRUE)  arrows(x0=x[id_validArrow], y0=y[id_validArrow]-dy[id_validArrow], x1=x[id_validArrow], y1=y[id_validArrow]+dy[id_validArrow], angle=90, code=3, length=0.02, col="black")
 }
 
 myMCMCSwipe <- function(dim, nPart=0, rho=0, vol=0, sigma=1, sct="random", nIt=5e5, nResamples=1, x.beta, df) {
@@ -217,7 +202,7 @@ myMCMCSwipe <- function(dim, nPart=0, rho=0, vol=0, sigma=1, sct="random", nIt=5
   l     <- vol**(1/dim)
   
   for (i in c(1:length(x.beta))) {
-    cat("i:",i,", ",x.beta[i]," : ")
+    cat("i:",i,", ",log10(x.beta[i]),"\t : ")
     
     watch.iter <- Sys.time()
     for (j in c(1:nResamples)) {
@@ -309,3 +294,89 @@ myFitErrors <- function(x, y, dy){
   
   return(best_par)
 }
+
+
+
+chisqr_PiecewiseLinAndExpFunction <- function(par, x, y, dy) {
+  # par[1]=A1, par[2]=X1, par[3]=A2, par[4]=X2
+  f <- rep(0,length(x))
+  if(par[2]<=0) return(Inf) # prevent the log of a negative number
+  if(par[4]<=0) return(Inf) # just return chi2 of infinity
+  
+  case1 <- which(x <= par[2])
+  case2 <- which(x >  par[2] & x < par[4])
+  case3 <- which(x >= par[4])
+  
+  f[case1] <- par[1]
+  f[case2] <- (par[1] + (log(x[case2]) - log(par[2])) * (par[3]-par[1])/(log(par[4])-log(par[2])))
+  f[case3] <- par[3]
+  
+  return(sum((y-f)**2/dy**2))
+}
+
+fit.ToData <- function(par, x, y, dy, fn){
+  dy[which(dy==0)] <- 0.01
+  dof <- length(y)-length(par)
+  res <- optim(par=par, fn=fn, y=y, dy=dy, x=x)
+  return(list(par=res$par, chi2=res$value, pval = 1-pchisq(q=res$value, df = dof)))
+}
+
+fit.getErrors <- function(par, x, y, dy, fn){
+  N <- length(y)
+  dy[which(dy==0)] <- 0.01
+  N_replicas <- 50
+  replicas <- array(data = NA, dim = c(N_replicas, N))
+  for (i in c(1:N)) {
+    replicas[ ,i] <- rnorm(n = N_replicas, mean=y[i], sd=dy[i])
+  }
+  #calculate best fit values (minimise chi2)
+  best_par <- array(data = NA, dim = c(N_replicas, length(par)+1))
+  for (j in c(1:N_replicas)) {
+    myfit <- optim(par = par, fn=fn, x=x, y=replicas[j, ], dy=dy)
+    best_par[j, c(1:length(par))] <- myfit$par
+    best_par[j, length(par)+1] <- myfit$value
+  }  
+  
+  errors <- list(A1err=sd(best_par[ , 1]), X1err=sd(best_par[ ,2]), A2err=sd(best_par[ ,3]), X2err=sd(best_par[ ,4]), chi2err=sd(best_par[5]))
+  return(errors)
+}
+
+fit.automaticRoutine <- function(startparam, x, y, dy, xrange, fn) {
+  id <- which(x > xrange[1] &  x < xrange[2])
+  par    <- fit.ToData   (startparam, x[id], y[id], dy[id], fn)
+  parerr <- fit.getErrors(startparam, x[id], y[id], dy[id], fn)
+  return(list(par=par, parerr=parerr))
+}
+
+fit.draw <- function(par, x, col="black", vlines=TRUE, lines=TRUE) {
+  if (vlines==TRUE) {
+    abline(v=par$par[2], col=col, lwd=2)
+    abline(v=par$par[4], col=col, lwd=2)
+  }
+  if (lines==TRUE) {
+    case1 <- which(x <= par$par[2])
+    case2 <- which(x >  par$par[2] & x < par$par[4])
+    case3 <- which(x >= par$par[4])
+    
+    f <- numeric(length(x))
+    f[case1] <- par$par[1]
+    f[case2] <- (par$par[1] + (log(x[case2]) - log(par$par[2])) * (par$par[3]-par$par[1])/(log(par$par[4])-log(par$par[2])))
+    f[case3] <- par$par[3]
+    
+    lines(x, f, col=col, lwd=2)
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+

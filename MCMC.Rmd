@@ -98,20 +98,25 @@ run_no <- max(resFrame$RUN_ID, na.rm=TRUE)+1
 # HYPERPARAMETERS:
 dim             <- 2
 nPart           <- 50
-rho             <- 0.01
+rho             <- 0.02
 
 nIt             <- 0.5e6
-nResamples      <- 3
+nResamples      <- 10
 
 sct             <- "ordered"
 # --------------------------------------------------------------------------------
 # Betas To Calculate
-x.beta <- exp(log(10)*seq(from=-7, to=7, length.out=71))
-lowerBound <- 1e-4
-upperBound <- 1e+4
+x.beta <- exp(log(10)*seq(from=-7, to=7, by=0.2))
+x.beta <- c(x.beta,1/exp(log(10)*seq(from=-2.1, to=-0.3, by=0.05))) # More detail in transition region
+x.beta <- x.beta[!duplicated(x.beta)]
+x.beta <- sort(x.beta)
 
-# x.beta <- x.beta[which(x.beta>=lowerBound)]
-# x.beta <- x.beta[which(x.beta< upperBound)]
+
+lowerBound <- 1e-2
+upperBound <- 1e-1
+
+x.beta <- x.beta[which(x.beta>=lowerBound)]
+x.beta <- x.beta[which(x.beta< upperBound)]
 
 # x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
 # x.beta <- x.beta[which(c(1:length(x.beta))%%2==0)]
@@ -136,17 +141,16 @@ load(file_name)
 # --------------------------------------------------------------------------------
 dim             <- 2   
 nPart           <- 50
-rho             <- 0.01
+rho             <- 0.02
 vol             <- nPart/rho
 # --------------------------------------------------------------------------------
 x.beta <- myGetBetaValues(dim=dim, vol=vol, rho=rho)
-
 # x.beta <- x.beta[which(x.beta>3e0)]
 
 plt.data <- myGetObservables(dim=dim, vol=vol, rho=rho, beta=x.beta)
 rm(x.beta)
 
-myPlotData(1/plt.data$x[which(plt.data$y.q<4)], plt.data$y.q[which(plt.data$y.q<4)]     , plt.data$y.q_Err     )
+myPlotData(1/plt.data$x, plt.data$y.q, plt.data$y.q_Err)
 abline(h=1)
 myPlotData(1/plt.data$x, plt.data$y.lambda, plt.data$y.lambda_Err)
 myPlotData(1/plt.data$x, plt.data$y.omega , plt.data$y.omega_Err )
@@ -166,7 +170,7 @@ load(file_name)
 # --------------------------------------------------------------------------------
 dim             <- 2
 nPart           <- 50
-rho             <- 0.01
+rho             <- 0.02
 vol             <- nPart/rho
 # --------------------------------------------------------------------------------
 x.beta <- myGetBetaValues(dim=dim, vol=vol, rho=rho)
@@ -187,152 +191,63 @@ y4err <- plt.data$y.kappa_Err * 1.0
 
 
 xlim <- c(1e-5, 1e5)
-xlim <- c(1e-3, 1e1)
+xlim <- c(5e-3, 5e-1)
 ylim <- c(0, max(y1+y1err, y2+y2err, y3+y3err, y4+y4err, na.rm=TRUE))
 
-log <- "x"
-
-plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log=log, main = "", xlab = "T", ylab = "Value")
-#q
-points(x, y1, pch=4, col="black", cex=0.5)
-lines(x, y1, col="black", lwd=1)
-arrows(x0=x, y0=y1-y1err, x1=x, y1=y1+y1err, angle=90, code=3, length=0.02, col="black")
-#lambda
-points(x, y2, pch=4, col="green", cex=0.5)
-lines(x, y2, col="green", lwd=1)
-arrows(x0=x, y0=y2-y2err, x1=x, y1=y2+y2err, angle=90, code=3, length=0.02, col="green")
-#omega
-points(x, y3, pch=4, col="blue", cex=0.5)
-lines(x, y3, col="blue" , lwd=1)
-arrows(x0=x, y0=y3-y3err, x1=x, y1=y3+y3err, angle=90, code=3, length=0.02, col="blue")
-#kappa
-points(x, y4, pch=4, col="red", cex=0.5)
-lines(x, y4, col="red"  , lwd=1)
-arrows(x0=x, y0=y4-y4err, x1=x, y1=y4+y4err, angle=90, code=3, length=0.02, col="red")
-
-# abline(v=1e-2)
-# abline(v=0.005, lwd=1, col="purple")
-# abline(v=0.015, lwd=1, col="purple")
-# abline(v=0.150, lwd=1, col="purple")
-# abline(v=0.500, lwd=1, col="purple")
-
+plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log="x", main = "", xlab = "T", ylab = "Value")
 # axis(1, at=axTicks(1), labels=paste(formatC(axTicks(1)/1000, format = 'd', 'kb')))
 
-legend("topright", legend = c("q", expression(lambda), expression(omega), expression(kappa)), lty = c(1,1,1,1), col = c("black", "green", "blue", "red"))
+# stuff <-         exp(log(10)*seq(from=-7   , to=7   , by=0.2))
+# stuff <- c(stuff,exp(log(10)*seq(from=-2.1, to=-0.3, by=0.2)))
+# abline(v=stuff, col="gray")
+
+draw.DataWithError(x=x, y=y1, dy=y1err, col="black", bars=TRUE, points=TRUE, lines=TRUE) #q
+draw.DataWithError(x=x, y=y2, dy=y2err, col="green", bars=TRUE, points=TRUE, lines=TRUE) #lambda
+# draw.DataWithError(x=x, y=y3, dy=y3err, col="blue" , bars=FALSE, points=FALSE, lines=TRUE) #omega
+draw.DataWithError(x=x, y=y4, dy=y4err, col="red"  , bars=TRUE, points=TRUE, lines=TRUE) #kappa
+
+# abline(v=c(0.005,0.015,0.150,0.500), lwd=1, col="purple")
+
+
+
+legend("topright", legend = c("q", expression(lambda), expression(kappa)), lty = c(1,1,1), col = c("black", "green", "red"))
 
 #custom fit
 
-fn <- function(par, x, y, dy) {
-  # par[1]=A1, par[2]=X1, par[3]=A2, par[4]=X2
-  f <- rep(0,length(x))
-  
-  case1 <- which(x <= par[2])
-  case2 <- which(x >  par[2] & x < par[4])
-  case3 <- which(x >= par[4])
-  
-  f[case1] <- par[1]
-  f[case2] <- (par[1] + (log(x[case2]) - log(par[2])) * (par[3]-par[1])/(log(par[4])-log(par[2])))
-  f[case3] <- par[3]    
-  
-  return(sum((y-f)**2/dy**2))
-}
-
-fitOrderParams <- function(par, x, y, dy){
-  dy[which(dy==0)] <- 0.01
-  dof <- length(y)-length(par)
-  res <- optim(par=par, fn=fn, y=y, dy=dy, x=x)
-  return(list(par=res$par, chi2=res$value, pval = 1-pchisq(q=res$value, df = dof)))
-}
-
-plotlin <- function(par, x){
-  f <- (par[1] + (log(x) - log(par[2])) * (par[3]-par[1])/(log(par[4])-log(par[2])))
-  return(f)
-}
-
-getErrorsOfFit <- function(par, x, y, dy){
-  N <- length(y)
-  dy[which(dy==0)] <- 0.01
-  N_replicas <- 50
-  replicas <- array(data = NA, dim = c(N_replicas, N))
-  for (i in c(1:N)) {
-    replicas[ ,i] <- rnorm(n = N_replicas, mean=y[i], sd=dy[i])
-  }
-  #calculate best fit values (minimise chi2)
-  best_par <- array(data = NA, dim = c(N_replicas, length(par)+1))
-  for (j in c(1:N_replicas)) {
-    myfit <- optim(par = par, fn =fn, x=x, y=replicas[j, ], dy=dy)
-    best_par[j, c(1:length(par))] <- myfit$par
-    best_par[j, length(par)+1] <- myfit$value
-  }  
-  
-  errors <- list(A1err=sd(best_par[ , 1]), X1err=sd(best_par[ ,2]), A2err=sd(best_par[ ,3]), X2err=sd(best_par[ ,4]), chi2err=sd(best_par[5]))
-  return(errors)
-}
-
 #fit to q:
-id <- which(x > 1e-3 &  x < 1e3)
-startparam1 <- c(3, 0.005, 0.1, 0.5)
-par1    <- fitOrderParams(startparam1, x, y1, y1err)
-par1err <- getErrorsOfFit(startparam1, x, y1, y1err)
-# abline(h=par1$par[1], col="purple", lwd=2)
-abline(v=par1$par[2], col="black", lwd=2)
-# abline(h=par1$par[3], col="purple", lwd=2)
-abline(v=par1$par[4], col="black", lwd=2)
-# lines(x, plotlin(par1$par, x), col="purple", lwd=2)
-cat("Fit to q: ")
-cat("A1:    ", par1$par[1], " +- " , par1err$A1err, "\n")
-cat("x1:    ", par1$par[2], " +- " , par1err$X1err, "\n")
-cat("A2:    ", par1$par[3], " +- " , par1err$A2err, "\n")
-cat("x2:    ", par1$par[4], " +- " , par1err$X2err, "\n")
-cat("Chi^2: ", par1$chi2  , " +- " , par1err$chi2err,  " , p-value: ", par1$pval, "\n")
+pars1 <- fit.automaticRoutine(startparam=c(5, 0.015, 0.1, 0.08), x=x, y=y1, dy=y1err, xrange=c(1e-3,1e3), fn=chisqr_PiecewiseLinAndExpFunction)
+fit.draw(pars1$par, x=x, col="black", lines=TRUE, vlines=FALSE)
 
 #fit to lambda:
-id <- which(x > 1e-3 &  x < 1e3)
-startparam2 <- c(0.5, 0.005, 3, 0.5)
-par2    <- fitOrderParams(startparam2, x[id], y2[id], y2err[id])
-par2err <- getErrorsOfFit(startparam2, x, y2, y2err)
-# abline(h=par2$par[1], col="purple", lwd=2)
-abline(v=par2$par[2], col="green", lwd=2)
-# abline(h=par2$par[3], col="purple", lwd=2)
-abline(v=par2$par[4], col="green", lwd=2)
-# lines(x, plotlin(par2$par, x), col="purple", lwd=2)
-cat("Fit to lambda: ")
-cat("A1:    ", par2$par[1], " +- " , par2err$A1err, "\n")
-cat("x1:    ", par2$par[2], " +- " , par2err$X1err, "\n")
-cat("A2:    ", par2$par[3], " +- " , par2err$A2err, "\n")
-cat("x2:    ", par2$par[4], " +- " , par2err$X2err, "\n")
-cat("Chi^2: ", par2$chi2  , " +- " , par2err$chi2err,  " , p-value: ", par2$pval, "\n")
+pars2 <- fit.automaticRoutine(startparam=c(0.5, 0.005, 3, 0.5), x=x, y=y2, dy=y2err, xrange=c(1e-3,1e3), fn=chisqr_PiecewiseLinAndExpFunction)
+fit.draw(pars2$par, x=x, col="green", lines=TRUE, vlines=FALSE)
 
 #fit to omega:
-# id <- which(x > 1e-3 &  x < 1e3)
-# par3 <- fitOrderParams(c(1, 0.005, 1, 0.42), x, y3, y3err)
-# abline(h=par3$par[1], col="purple", lwd=2)
-# abline(v=par3$par[2], col="blue", lwd=2)
-# abline(h=par3$par[3], col="purple", lwd=2)
-# abline(v=par3$par[4], col="blue", lwd=2)
-# lines(x, plotlin(par3$par, x), col="purple", lwd=2)
-# cat("Fit to omega: ", "A1: ", par3$par[1], "\n",  "x1: ", par3$par[2], "\n", "A2: ", par3$par[3], "\n", "x2: ", par3$par[4], "\n" ,
-#          "Chi^2: ", par3$chi2, " , p-value: ", par3$pval, "\n")
+# pars3 <- fit.automaticRoutine(startparam=c(0.5, 0.005, 3, 0.5), x=x, y=y3, dy=y3err, xrange=c(1e-3,1e3), fn=chisqr_PiecewiseLinAndExpFunction)
+# fit.draw(pars3$par, x=x, col="blue", lines=FALSE, vlines=FALSE)
 
 #fit to kappa:
-startparam4 <- c(3, 0.005, 0.1, 0.5)
-par4    <- fitOrderParams(startparam4, x, y4, y4err)
-par4err <- getErrorsOfFit(startparam4, x, y4, y4err)
-# abline(h=par4$par[1], col="purple", lwd=2)
-abline(v=par4$par[2], col="red", lwd=2)
-# abline(h=par4$par[3], col="purple", lwd=2)
-abline(v=par4$par[4], col="red", lwd=2)
-# lines(x, plotlin(par4$par, x), col="purple", lwd=2)
-cat("Fit to kappa: ")
-cat("A1:    ", par4$par[1], " +- " , par4err$A1err, "\n")
-cat("x1:    ", par4$par[2], " +- " , par4err$X1err, "\n")
-cat("A2:    ", par4$par[3], " +- " , par4err$A2err, "\n")
-cat("x2:    ", par4$par[4], " +- " , par4err$X2err, "\n")
-cat("Chi^2: ", par4$chi2  , " +- " , par4err$chi2err,  " , p-value: ", par4$pval, "\n")
+pars4 <- fit.automaticRoutine(startparam=c(3, 0.005, 0.1, 0.5), x=x, y=y4, dy=y4err, xrange=c(1e-3,1e3), fn=chisqr_PiecewiseLinAndExpFunction)
+fit.draw(pars4$par, x=x, col="red", lines=TRUE, vlines=FALSE)
+
+print_fitRes <- function(varname, par, parErr) {
+  cat("\nFit to ",varname,": \n")
+  cat("A1:    ", par$par[1], "\t +- " , parErr$A1err, "\n")
+  cat("x1:    ", par$par[2], "\t +- " , parErr$X1err, "\n")
+  cat("A2:    ", par$par[3], "\t +- " , parErr$A2err, "\n")
+  cat("x2:    ", par$par[4], "\t +- " , parErr$X2err, "\n")
+  cat("Chi^2: ", par$chi2  , "\t +- " , parErr$chi2err,  "\t , p-value: ", par$pval, "\n")
+}
+print_fitRes("q",pars1$par, pars1$parerr)
+print_fitRes("lambda",pars2$par, pars2$parerr)
+# # print_fitRes("omega",pars3$par, pars3$parerr)
+print_fitRes("kappa",pars4$par, pars4$parerr)
+rm(print_fitRes)
 
 rm(resFrame)
-rm(x, xlim, ylim, y1, y1err, y2, y2err, y3, y3err, y4, y4err, log)
+rm(x, xlim, ylim, y1, y1err, y2, y2err, y3, y3err, y4, y4err)
 rm(plt.data, dim, rho, vol, nPart, file_name)
+rm(pars1)
 ```
 
 ```{r plot_orderParam}
