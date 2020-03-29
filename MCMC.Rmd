@@ -14,10 +14,10 @@ source("DataFrameHelper.R")
 ```{r single_simulation}
 # --------------------------------------------------------------------------------
 # HYPERPARAMETERS:
-dim             <- 2    # Number of dimensions
+dim             <- 1    # Number of dimensions
 nPart           <- 50
-rho             <- 0.01
-t               <- 0.2  # Temperature of heat bath
+rho             <- 0.1
+t               <- 0.001  # Temperature of heat bath
 
 
 nIt             <- 2e6  # Number of iterations
@@ -41,7 +41,7 @@ start_time <- Sys.time()
 MCMC_Single_Run <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, N_burnIn=0, X0, q)
 end_time <- Sys.time()
 # --------------------------------------------------------------------------------
-# pdf("config_rho010_t0001.pdf")
+# pdf("config_rho010_t0001.pdf", width=10*0.55, height=10*0.55)
 show_particles(MCMC_Single_Run$X, q, vol)
 # dev.off()
 # --------------------------------------------------------------------------------
@@ -83,36 +83,41 @@ rm(nIt)
 ```
 
 ```{r}
-# myCreateNewFrame("MCMC_Results_V8.RData")
+file_name <- "MCMC_Results_OrderedInit.RData"
 
-myShowContentOverview("MCMC_Results_V8.RData")
+# myCreateNewFrame(file_name)
+
+myShowContentOverview(file_name)
 ```
 
 ```{r MCMC_Swipe}
 # --------------------------------------------------------------------------------
 # LOAD RESULTS DATA FRAME FROM DISK
-file_name <- "MCMC_Results_V8.RData"
 load(file_name)
 run_no <- max(resFrame$RUN_ID, na.rm=TRUE)+1
 # --------------------------------------------------------------------------------
+# Standard Sets:
+# 1D: nPart <- 50, rho <- 0.1
+# 2D: nPart <- 50, rho <- 0.05
+# 3D: nPart <- 64, rho <- 0.01
 # HYPERPARAMETERS:
-dim             <- 2
+dim             <- 1
 nPart           <- 50
-rho             <- 0.02
+rho             <- 0.1
 
 nIt             <- 0.5e6
-nResamples      <- 2
+nResamples      <- 10
 
 sct             <- "ordered"
 # --------------------------------------------------------------------------------
 # Betas To Calculate
-x.T <- exp(log(10)*seq(from=-7, to=7, by=0.2))
+x.T <- exp(log(10)*seq(from=-3.2, to=1.2, by=0.2))
 x.T <- c(x.T, exp(log(10)*seq(from=-2.1, to=-0.3, by=0.05))) # More detail in transition region
 
 lowerBound <- 1e-2
 upperBound <- 1e-1
-x.T <- x.T[which(x.T>=lowerBound)]
-x.T <- x.T[which(x.T< upperBound)]
+# x.T <- x.T[which(x.T>=lowerBound)]
+# x.T <- x.T[which(x.T< upperBound)]
 x.T <- sort(x.T)
 
 x.T <- x.T[!duplicated(round(x.T,8))]
@@ -131,18 +136,17 @@ resFrame <- myMCMCSwipe(dim=dim, nPart=nPart, rho=rho, sigma=1, sct=sct, nIt=nIt
 save(resFrame, file=file_name)
 rm(resFrame)
 
-rm(file_name, run_no, dim, nPart, rho, nIt, nResamples, x.beta, x.T, lowerBound, upperBound)
+rm(run_no, dim, nPart, rho, nIt, nResamples, x.beta, x.T, lowerBound, upperBound)
 ```
 
 
 ```{r plot_orderParam}
 source("DataFrameHelper.R")
-file_name <- "MCMC_Results_V8.RData"
 load(file_name)
 # --------------------------------------------------------------------------------
-dim             <- 2   
+dim             <- 2
 nPart           <- 50
-rho             <- 0.02
+rho             <- 0.05
 vol             <- nPart/rho
 # --------------------------------------------------------------------------------
 x.beta <- myGetBetaValues(dim=dim, vol=vol, rho=rho)
@@ -158,12 +162,11 @@ myPlotData(1/plt.data$x, plt.data$y.omega , plt.data$y.omega_Err )
 myPlotData(1/plt.data$x, plt.data$y.kappa , plt.data$y.kappa_Err )
 
 rm(resFrame)
-rm(plt.data, dim, rho, vol, file_name)
+rm(plt.data, dim, rho, vol)
 ```
 
 ```{r plots}
 source("DataFrameHelper.R")
-file_name <- "MCMC_Results_V8.RData"
 load(file_name)
 
 # options(warn=-1)
@@ -171,7 +174,7 @@ load(file_name)
 # --------------------------------------------------------------------------------
 dim             <- 2
 nPart           <- 50
-rho             <- 0.02
+rho             <- 0.05
 vol             <- nPart/rho
 # --------------------------------------------------------------------------------
 x.beta <- myGetBetaValues(dim=dim, vol=vol, rho=rho)
@@ -193,9 +196,10 @@ y4err <- plt.data$y.kappa_Err * 1.0
 
 xlim <- c(1e-5, 1e5)
 xlim <- c(1e-3, 1e0)
-ylim <- c(0, max(y1+y1err, y2+y2err, y3+y3err, y4+y4err, na.rm=TRUE))
+ylim <- c(0, max(y1+y1err, y4+y4err, na.rm=TRUE))
+# ylim <- c(0, max(y1+y1err, y2+y2err, y3+y3err, y4+y4err, na.rm=TRUE))
 
-pdf("plot.pdf", width = 11, height = 7)
+# pdf("plot.pdf", width = 10*0.7, height = 6*0.7)
 plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log="x", main = "", xlab = "T", ylab = "Value")
 # axis(1, at=axTicks(1), labels=paste(formatC(axTicks(1)/1000, format = 'd', 'kb')))
 
@@ -204,7 +208,7 @@ plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log="x", main = "", xlab = "T", y
 # abline(v=stuff, col="gray")
 
 draw.DataWithError(x=x, y=y1, dy=y1err, col="black", bars=TRUE, points=TRUE, lines=TRUE) #q
-draw.DataWithError(x=x, y=y2, dy=y2err, col="green", bars=TRUE, points=TRUE, lines=TRUE) #lambda
+# draw.DataWithError(x=x, y=y2, dy=y2err, col="green", bars=TRUE, points=TRUE, lines=TRUE) #lambda
 # draw.DataWithError(x=x, y=y3, dy=y3err, col="blue" , bars=FALSE, points=FALSE, lines=TRUE) #omega
 draw.DataWithError(x=x, y=y4, dy=y4err, col="red"  , bars=TRUE, points=TRUE, lines=TRUE) #kappa
 
@@ -212,7 +216,7 @@ draw.DataWithError(x=x, y=y4, dy=y4err, col="red"  , bars=TRUE, points=TRUE, lin
 
 
 
-legend("topright", legend = c("q", expression(lambda), expression(kappa)), lty = c(1,1,1), col = c("black", "green", "red"))
+legend("topright", legend = c("q", expression(kappa)), lty = c(1,1), col = c("black", "red"))
 
 #custom fit
 
@@ -221,8 +225,8 @@ pars1 <- fit.automaticRoutine(startparam=c(5, 0.015, 0.1, 0.08), x=x, y=y1, dy=y
 fit.draw(pars1$par, x=x, col="black", lines=TRUE, vlines=FALSE)
 
 #fit to lambda:
-pars2 <- fit.automaticRoutine(startparam=c(0.5, 0.005, 3, 0.5), x=x, y=y2, dy=y2err, xrange=c(1e-3,1e3), fn=chisqr_PiecewiseLinAndExpFunction)
-fit.draw(pars2$par, x=x, col="green", lines=TRUE, vlines=FALSE)
+# pars2 <- fit.automaticRoutine(startparam=c(0.5, 0.005, 3, 0.5), x=x, y=y2, dy=y2err, xrange=c(1e-3,1e3), fn=chisqr_PiecewiseLinAndExpFunction)
+# fit.draw(pars2$par, x=x, col="green", lines=TRUE, vlines=FALSE)
 
 #fit to omega:
 # pars3 <- fit.automaticRoutine(startparam=c(0.5, 0.005, 3, 0.5), x=x, y=y3, dy=y3err, xrange=c(1e-3,1e3), fn=chisqr_PiecewiseLinAndExpFunction)
@@ -241,7 +245,7 @@ print_fitRes <- function(varname, par, parErr) {
   cat("Chi^2: ", par$chi2  , "\t +- " , parErr$chi2err,  "\t , p-value: ", par$pval, "\n")
 }
 print_fitRes("q",pars1$par, pars1$parerr)
-print_fitRes("lambda",pars2$par, pars2$parerr)
+# print_fitRes("lambda",pars2$par, pars2$parerr)
 # # print_fitRes("omega",pars3$par, pars3$parerr)
 print_fitRes("kappa",pars4$par, pars4$parerr)
 rm(print_fitRes)
@@ -249,11 +253,12 @@ rm(print_fitRes)
 
 rm(resFrame)
 rm(x, xlim, ylim, y1, y1err, y2, y2err, y3, y3err, y4, y4err)
-rm(plt.data, dim, rho, vol, nPart, file_name)
+rm(plt.data, dim, rho, vol, nPart)
 rm(pars1)
 
-dev.off()
+# dev.off()
 ```
+
 ```{r logistic_curve}
 x <- exp(log(10)*seq(from=-3, to=0, by=0.2))
 
@@ -271,7 +276,6 @@ plot(x,y, type="b", log = "x")
 
 ```{r plot_orderParam}
 source("DataFrameHelper.R")
-file_name <- "MCMC_Results_V8.RData"
 load(file_name)
 # --------------------------------------------------------------------------------
 dim             <- 2   
@@ -301,7 +305,7 @@ for (j in c(1:length(obs_id))) {
 }
 
 # rm(resFrame)
-rm(dim, z.rho, file_name)
+rm(dim, z.rho)
 ```
 
 ## deprecated
@@ -309,7 +313,6 @@ rm(dim, z.rho, file_name)
 ```{r plot_results_with_fit}
 # --------------------------------------------------------------------------------
 # LOAD RESULTS DATA FRAME FROM DISK
-file_name <- "MCMC_Results_V4_w_q.RData"
 load(file_name)
 # --------------------------------------------------------------------------------
 # HYPERPARAMETERS:
@@ -362,7 +365,7 @@ cat("Chisqr of fit: ", res_fit$chi2, "\n")
 #----------------------------------------------------------------------------------------------------------------
 
 rm(resFrame)
-rm(x.beta, y.iat, i, d, particleDensity, vol, nPart, l, idx, file_name)
+rm(x.beta, y.iat, i, d, particleDensity, vol, nPart, l, idx)
 ```
 
 
@@ -424,28 +427,37 @@ rm(dim, rho, vol, t, nPart, init_config, type)
 ```
 
 ```{r}
-nIt <- 8.5e5
-x.ticks <- c(1e0:nIt)[which(c(1e4:nIt)%%500==0)]
+nIt <- 0.5e5
+x.ticks <- c(1:nIt)
+x.ticks <- x.ticks[which(x.ticks%%1==0)]
+# x.ticks <- c(1e0:nIt)
 
 # E1 <- MCMC_BurnIn_Run1$E
 E2 <- MCMC_BurnIn_Run2$E
 E3 <- MCMC_BurnIn_Run3$E
 
-plot(NA, NA, xlim=c(1,nIt), ylim=c(0.001,5), xlab="Markov Chain Step", ylab="Energy", log="y")
-# lines(x.ticks, E1[x.ticks], col="red")
-lines(x.ticks, E2[x.ticks] - min(E2[x.ticks]), col="orange")
-lines(x.ticks, E3[x.ticks] - min(E3[x.ticks]), col="blue")
-
 plot(NA, NA, xlim=c(1,nIt), ylim=c(-1,2), xlab="Markov Chain Step", ylab="Energy", log="")
-lines(x.ticks, E2[x.ticks] - mean(E2[c((nIt-1e5):nIt)]), col="orange")
-lines(x.ticks, E3[x.ticks] - mean(E3[c((nIt-1e5):nIt)]), col="blue")
+lines(x.ticks, E2[x.ticks] - mean(E2[c(round(nIt/2):nIt)]), col="red")
+lines(x.ticks, E3[x.ticks] - mean(E3[c(round(nIt/2):nIt)]), col="blue")
 abline(h=0)
 # abline(v=nIt)
 
-plot(NA, NA, xlim=c(1,nIt), ylim=c(-22,2), xlab="Markov Chain Step", ylab="Energy", log="")
+pdf("burnin_energy.pdf", width=10*0.7, height=6*0.7)
+plot(NA, NA, xlim=c(-5e2,nIt), ylim=c(-21,-15), xlab="Markov Chain Step", ylab="Energy", log="", xaxs="i", yaxs="r")
+# lines(x.ticks, E1[x.ticks], col="red")
+lines(x.ticks, E2[x.ticks], col="red")
 lines(x.ticks, E3[x.ticks], col="blue")
-abline(h=0)
 
+legend("topright", legend = c("T = 0.050", "T = 0.001"), lty = c(1,1), col = c("red", "blue"))
+options(scipen=10)
+# myTicks = axTicks(1)
+# axis(1, at = myTicks, labels = paste(formatC(myTicks, format = 'd'), '', sep = ''))
+
+# plot(NA, NA, xlim=c(1,nIt), ylim=c(-22,2), xlab="Markov Chain Step", ylab="Energy", log="")
+# lines(x.ticks, E3[x.ticks], col="blue")
+# abline(h=0)
+
+dev.off()
 rm(x.ticks)
 ```
 
@@ -487,18 +499,3 @@ abline(h=0)
 
 rm(x,y1,y2,y3)
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
