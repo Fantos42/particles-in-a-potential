@@ -189,7 +189,7 @@ draw.DataWithError <- function(x, y, dy, col="black", bars=TRUE, points=TRUE, li
   
   if (bars==TRUE)  points(x, y, pch=4, col=col, cex=0.5)
   if (lines==TRUE) lines(x, y, col=col, lwd=1)
-  if (bars==TRUE)  arrows(x0=x[id_validArrow], y0=y[id_validArrow]-dy[id_validArrow], x1=x[id_validArrow], y1=y[id_validArrow]+dy[id_validArrow], angle=90, code=3, length=0.02, col="black")
+  if (bars==TRUE)  arrows(x0=x[id_validArrow], y0=y[id_validArrow]-dy[id_validArrow], x1=x[id_validArrow], y1=y[id_validArrow]+dy[id_validArrow], angle=90, code=3, length=0.02, col=col)
 }
 
 myMCMCSwipe <- function(dim, nPart=0, rho=0, vol=0, sigma=1, sct="random", nIt=5e5, nResamples=1, x.beta, df) {
@@ -305,6 +305,7 @@ chisqr_PiecewiseLinAndExpFunction <- function(par, x, y, dy) {
   f <- rep(0,length(x))
   if(par[2]<=0) return(Inf) # prevent the log of a negative number
   if(par[4]<=0) return(Inf) # just return chi2 of infinity
+  if(par[4]<=par[2]) return(Inf)
   
   case1 <- which(x <= par[2])
   case2 <- which(x >  par[2] & x < par[4])
@@ -350,7 +351,7 @@ fit.getErrors <- function(par, x, y, dy, fn){
 fit.automaticRoutine <- function(startparam, x, y, dy, xrange, fn) {
   id <- which(x > xrange[1] &  x < xrange[2])
   par    <- fit.ToData   (startparam, x[id], y[id], dy[id], fn)
-  parerr <- fit.getErrors(startparam, x[id], y[id], dy[id], fn)
+  parerr <- fit.getErrors(par$par, x[id], y[id], dy[id], fn)
   return(list(par=par, parerr=parerr))
 }
 
