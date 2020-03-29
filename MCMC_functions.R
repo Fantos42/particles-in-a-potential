@@ -84,12 +84,20 @@ show_particles <- function(x, q, V){
     
   } else if (dim == 3) {
     ballradius <- 0.5
+    
+    # rgl.open()
     open3d()
-    plot3d(x=NA, y=NA, z=NA, xlim=c(-l/2,l/2),ylim=c(-l/2,l/2),zlim=c(-l/2,l/2), xlab="", ylab="", zlab="")
+    plot3d(x=NA, y=NA, z=NA, xlim=c(-l/2,l/2),ylim=c(-l/2,l/2),zlim=c(-l/2,l/2), xlab="x-axis", ylab="y-axis", zlab="z-axis")
     spheres3d(x=posParticles[,1], y=posParticles[,2], z=posParticles[,3], col = "red",
               radius=ballradius)
     spheres3d(x=negParticles[,1], y=negParticles[,2], z=negParticles[,3], col = "blue",
               radius=ballradius)
+    
+    rgl.viewpoint( theta = 240, phi = 10)
+    
+    # axes3d( edges=c("x++", "y++", "z"))
+    # title3d(xlab = "x-axis", ylab = "y-axis",zlab = "z-axis") 
+    
   }
 }
 
