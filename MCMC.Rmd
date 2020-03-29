@@ -14,10 +14,10 @@ source("DataFrameHelper.R")
 ```{r single_simulation}
 # --------------------------------------------------------------------------------
 # HYPERPARAMETERS:
-dim             <- 1    # Number of dimensions
-nPart           <- 50
-rho             <- 0.1
-t               <- 0.001  # Temperature of heat bath
+dim             <- 4    # Number of dimensions
+nPart           <- 81
+rho             <- 0.005
+t               <- 0.0001  # Temperature of heat bath
 
 
 nIt             <- 2e6  # Number of iterations
@@ -33,7 +33,7 @@ init_config <- gen_initConfig(type=type, dim=dim, vol=vol, nPart=nPart)
 X0 <- init_config$X0
 q  <- init_config$q
 rm(init_config)
-show_particles(X0, q, vol)
+# show_particles(X0, q, vol)
 # --------------------------------------------------------------------------------
 cat("Run MCMC particles in a potential . .\n")
 
@@ -42,7 +42,7 @@ MCMC_Single_Run <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, N_burnIn=0, X0, q)
 end_time <- Sys.time()
 # --------------------------------------------------------------------------------
 # pdf("config_rho010_t0001.pdf", width=10*0.55, height=10*0.55)
-show_particles(MCMC_Single_Run$X, q, vol)
+# show_particles(MCMC_Single_Run$X, q, vol)
 # dev.off()
 # --------------------------------------------------------------------------------
 cat("Number of {positive, negative} particles: {", length(which(q==+1)), ",", length(which(q==-1)),"}\n")
@@ -83,7 +83,7 @@ rm(nIt)
 ```
 
 ```{r}
-file_name <- "MCMC_Results_OrderedInit.RData"
+file_name <- "MCMC_Results_4D.RData"
 
 # myCreateNewFrame(file_name)
 
@@ -101,12 +101,12 @@ run_no <- max(resFrame$RUN_ID, na.rm=TRUE)+1
 # 2D: nPart <- 50, rho <- 0.05
 # 3D: nPart <- 64, rho <- 0.01
 # HYPERPARAMETERS:
-dim             <- 3
-nPart           <- 64
-rho             <- 0.01
+dim             <- 4
+nPart           <- 81
+rho             <- 0.001
 
 nIt             <- 0.5e6
-nResamples      <- 10
+nResamples      <- 5
 
 sct             <- "ordered"
 # --------------------------------------------------------------------------------
@@ -172,9 +172,9 @@ load(file_name)
 # options(warn=-1)
 # options(warn=0)
 # --------------------------------------------------------------------------------
-dim             <- 3
-nPart           <- 64
-rho             <- 0.01
+dim             <- 4
+nPart           <- 81
+rho             <- 0.001
 vol             <- nPart/rho
 # --------------------------------------------------------------------------------
 x.beta <- myGetBetaValues(dim=dim, vol=vol, rho=rho)
@@ -199,7 +199,7 @@ xlim <- c(1e-3, 1e0)
 ylim <- c(0, max(y1+y1err, y4+y4err, na.rm=TRUE))
 # ylim <- c(0, max(y1+y1err, y2+y2err, y3+y3err, y4+y4err, na.rm=TRUE))
 
-pdf("paramplot_d2_rho005_n50.pdf", width = 10*0.7, height = 6*0.7)
+# pdf("paramplot_d2_rho005_n50.pdf", width = 10*0.7, height = 6*0.7)
 plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log="x", main = "", xlab = "T", ylab = "Value")
 # axis(1, at=axTicks(1), labels=paste(formatC(axTicks(1)/1000, format = 'd', 'kb')))
 
@@ -245,7 +245,7 @@ print_fitRes <- function(varname, par, parErr) {
   cat("x1:    ", par$par[2], "\t +- " , parErr$X1err, "\n")
   cat("A2:    ", par$par[3], "\t +- " , parErr$A2err, "\n")
   cat("x2:    ", par$par[4], "\t +- " , parErr$X2err, "\n")
-  cat("Chi^2: ", par$chi2  , "\t +- " , parErr$chi2err,  "\t , p-value: ", par$pval, "\n")
+  cat("Chi^2: ", par$chi2/par$dof  , "\t +- " , parErr$chi2err,  "\t , p-value: ", par$pval, "\n")
 }
 print_fitRes("q",pars1$par, pars1$parerr)
 # print_fitRes("lambda",pars2$par, pars2$parerr)
@@ -259,7 +259,7 @@ rm(x, xlim, ylim, y1, y1err, y2, y2err, y3, y3err, y4, y4err)
 rm(plt.data, dim, rho, vol, nPart)
 rm(pars1)
 
-dev.off()
+# dev.off()
 ```
 
 ```{r logistic_curve}

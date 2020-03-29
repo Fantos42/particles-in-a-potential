@@ -322,7 +322,7 @@ fit.ToData <- function(par, x, y, dy, fn){
   dy[which(dy==0)] <- 0.01
   dof <- length(y)-length(par)
   res <- optim(par=par, fn=fn, y=y, dy=dy, x=x)
-  return(list(par=res$par, chi2=res$value, pval = 1-pchisq(q=res$value, df = dof)))
+  return(list(par=res$par, chi2=res$value, pval = 1-pchisq(q=res$value, df = dof), dof=dof))
 }
 
 fit.getErrors <- function(par, x, y, dy, fn){

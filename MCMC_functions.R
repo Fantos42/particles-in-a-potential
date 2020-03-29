@@ -126,13 +126,11 @@ gen_initConfig <- function(type="random", dim, vol, nPart, lc=1.5) {
     
     offset <- l / 2 * (1 - 1/nCol) - l / 4
     
-    # 1 Dimension:
     if (dim==1) {
       for (i in c(1:nPart)) {
         X0[i,1] <- (i-1) * lc - offset
       }
     } else if (dim == 2) {
-      # 2 Dimensions:
       for (i in c(1:nPart)) {
         X0[i,1] <- (floor((i-1) / nCol)) * lc - offset
         X0[i,2] <- ((i-1) %% nCol      ) * lc - offset
@@ -149,9 +147,28 @@ gen_initConfig <- function(type="random", dim, vol, nPart, lc=1.5) {
         
         q[i] <- (-1)**(a+b+c)
       }
+    } else if (dim == 4) {
+      if (nPart!=81) {
+        cat("ERROR: Startconfiguration in 4D only available for 81 particles!")
+        return()
+      }
+      for (a in c(0:2)) {
+        for (b in c(0:2)) {
+          for (c in c(0:2)) {
+            for (d in c(0:2)) {
+              i <- a * 27 + b * 9 + c * 3 + d
+              
+              X0[i,1] <- a * lc - offset
+              X0[i,2] <- b * lc - offset
+              X0[i,3] <- c * lc - offset
+              X0[i,4] <- d * lc - offset
+              
+              q[i] <- (-1)**(a+b+c+d)
+            }
+          }
+        }
+      }
     }
-    
-    # 3 Dimensions:
     
     
     if (dim==1 | dim==2) {
