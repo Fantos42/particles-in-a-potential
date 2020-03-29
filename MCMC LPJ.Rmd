@@ -1,0 +1,504 @@
+---
+title: 'MCMC for particles in a potential'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+source("MCMC_functions LPJ.R")
+source("DataFrameHelper LPJ.R")
+```
+
+
+```{r single_simulation}
+# --------------------------------------------------------------------------------
+# HYPERPARAMETERS:
+dim             <- 2    # Number of dimensions
+nPart           <- 50
+rho             <- 0.05
+t               <- 0.001  # Temperature of heat bath
+
+
+nIt             <- 2e6  # Number of iterations
+# nIt             <- 1
+beta            <- 1/t
+
+vol   <- nPart / rho
+l     <- vol**(1/dim)
+# --------------------------------------------------------------------------------
+# Start configuration: (type="ordered" or type="random")
+type <- "ordered"
+init_config <- gen_initConfig(type=type, dim=dim, vol=vol, nPart=nPart)
+X0 <- init_config$X0
+q  <- init_config$q
+rm(init_config)
+show_particles(X0, q, vol)
+# --------------------------------------------------------------------------------
+cat("Run MCMC particles in a potential . .\n")
+
+start_time <- Sys.time()
+MCMC_Single_Run <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, N_burnIn=0, X0, q)
+end_time <- Sys.time()
+# --------------------------------------------------------------------------------
+# pdf("config_rho010_t0001.pdf", width=10*0.55, height=10*0.55)
+show_particles(MCMC_Single_Run$X, q, vol)
+# dev.off()
+# --------------------------------------------------------------------------------
+cat("Number of {positive, negative} particles: {", length(which(q==+1)), ",", length(which(q==-1)),"}\n")
+cat("Runtime: ",as.double(t2<- end_time - start_time, units='secs'),"\n")
+cat("Acceptrate: ", MCMC_Single_Run$Accpetance*100,"%\n")
+cat("q: ", mean(MCMC_Single_Run$q), "\n")
+cat("Omega: ", mean(MCMC_Single_Run$omega), "\n")
+cat("Lambda: ", mean(MCMC_Single_Run$lambda), "\n")
+cat("Kappa: ", mean(MCMC_Single_Run$kappa), "\n")
+# print(MCMC_Single_Run$X)
+# print(vol**(1/dim)/2)
+# --------------------------------------------------------------------------------
+rm(dim, rho, vol, beta, t, nPart, l, X0, q, start_time, end_time, t2, type, nIt)
+# --------------------------------------------------------------------------------
+```
+
+```{r evaluation_acf}
+nIt             <- 0.5e6
+E <- cumsum(MCMC_Single_Run$E)
+print(E)
+# # E <- MCMC_Single_Run$dE
+# # print(MCMC_Single_Run$dE)
+# x.ticks <- c(1e1:nIt)
+# # plot(x=x.ticks,y=E[x.ticks],type='l',log='')
+# # plot(x=x.ticks,y=E[x.ticks]+abs(min(E[x.ticks]))+1,type='l',log='y')
+# rm(x.ticks)
+# 
+# acf_range <- c((nIt-1e5):nIt)
+# start_time <- Sys.time()
+# # acf(E[acf_range], lag.max = 50000)
+# cat("ACF runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
+# 
+# acf_range <- c((nIt-3e5):nIt)
+# start_time <- Sys.time()
+# cat("IAT_custom: ",IAT_CPP(E[acf_range]),"\n")
+# cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
+rm(nIt)
+```
+
+```{r}
+file_name <- "MCMC_Results_Ordered_LJP.RData"
+
+# myCreateNewFrame(file_name)
+
+myShowContentOverview(file_name)
+```
+
+```{r MCMC_Swipe}
+# --------------------------------------------------------------------------------
+# LOAD RESULTS DATA FRAME FROM DISK
+load(file_name)
+run_no <- max(resFrame$RUN_ID, na.rm=TRUE)+1
+# --------------------------------------------------------------------------------
+# Standard Sets:
+# 1D: nPart <- 50, rho <- 0.1
+# 2D: nPart <- 50, rho <- 0.05
+# 3D: nPart <- 64, rho <- 0.01
+# HYPERPARAMETERS:
+dim             <- 3
+nPart           <- 64
+rho             <- 0.01
+
+nIt             <- 0.5e6
+nResamples      <- 30
+
+sct             <- "ordered"
+# --------------------------------------------------------------------------------
+# Betas To Calculate
+x.T <- exp(log(10)*seq(from=-3.2, to=1.2, by=0.2))
+x.T <- c(x.T, exp(log(10)*seq(from=-2.1, to=-0.3, by=0.05))) # More detail in transition region
+
+lowerBound <- 1e-2
+upperBound <- 1e-1
+# x.T <- x.T[which(x.T>=lowerBound)]
+# x.T <- x.T[which(x.T< upperBound)]
+x.T <- sort(x.T)
+
+x.T <- x.T[!duplicated(round(x.T,8))]
+
+# x.T <- x.T[which(c(1:length(x.T))%%2==0)]
+# x.T <- x.T[which(c(1:length(x.T))%%2==0)]
+# x.T <- x.T[which(c(1:length(x.T))%%2==0)]
+# x.T <- x.T[which(c(1:length(x.T))%%2==0)]
+# x.T <- x.T[which(c(1:length(x.T))%%2==0)]
+
+x.beta <- 1/x.T
+# --------------------------------------------------------------------------------
+
+resFrame <- myMCMCSwipe(dim=dim, nPart=nPart, rho=rho, sigma=1, sct=sct, nIt=nIt, nResamples=nResamples, x.beta=x.beta, df=resFrame)
+
+save(resFrame, file=file_name)
+rm(resFrame)
+
+rm(run_no, dim, nPart, rho, nIt, nResamples, x.beta, x.T, lowerBound, upperBound)
+```
+
+
+```{r plot_orderParam}
+source("DataFrameHelper.R")
+load(file_name)
+# --------------------------------------------------------------------------------
+dim             <- 3
+nPart           <- 64
+rho             <- 0.01
+vol             <- nPart/rho
+# --------------------------------------------------------------------------------
+x.beta <- myGetBetaValues(dim=dim, vol=vol, rho=rho)
+# x.beta <- x.beta[which(x.beta>3e0)]
+
+plt.data <- myGetObservables(dim=dim, vol=vol, rho=rho, beta=x.beta)
+rm(x.beta)
+
+myPlotData(1/plt.data$x, plt.data$y.q, plt.data$y.q_Err)
+abline(h=1)
+# myPlotData(1/plt.data$x, plt.data$y.lambda, plt.data$y.lambda_Err)
+# myPlotData(1/plt.data$x, plt.data$y.omega , plt.data$y.omega_Err )
+myPlotData(1/plt.data$x, plt.data$y.kappa , plt.data$y.kappa_Err )
+
+rm(resFrame)
+rm(plt.data, dim, rho, vol)
+```
+
+```{r plots}
+source("DataFrameHelper.R")
+load(file_name)
+
+# options(warn=-1)
+# options(warn=0)
+# --------------------------------------------------------------------------------
+dim             <- 2
+nPart           <- 50
+rho             <- 0.05
+vol             <- nPart/rho
+# --------------------------------------------------------------------------------
+x.beta <- myGetBetaValues(dim=dim, vol=vol, rho=rho)
+
+plt.data <- myGetObservables(dim=dim, vol=vol, rho=rho, beta=x.beta)
+rm(x.beta)
+
+#plot custom
+x <- 1/plt.data$x     
+y1    <- plt.data$y.q         * 0.1
+y1err <- plt.data$y.q_Err     * 0.1
+y2    <- plt.data$y.lambda    * 0.1
+y2err <- plt.data$y.lambda_Err* 0.1
+y3    <- plt.data$y.omega     * 1.0
+y3err <- plt.data$y.omega_Err * 1.0
+y4    <- plt.data$y.kappa     * 1.0
+y4err <- plt.data$y.kappa_Err * 1.0
+
+
+xlim <- c(1e-5, 1e5)
+xlim <- c(1e-3, 1e0)
+ylim <- c(0, max(y1+y1err, y4+y4err, na.rm=TRUE))
+# ylim <- c(0, max(y1+y1err, y2+y2err, y3+y3err, y4+y4err, na.rm=TRUE))
+
+pdf("paramplotLJP_d2_rho005_n50_2D.pdf", width = 10*0.7, height = 6*0.7)
+plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log="x", main = "", xlab = "T", ylab = "Value")
+# axis(1, at=axTicks(1), labels=paste(formatC(axTicks(1)/1000, format = 'd', 'kb')))
+
+# stuff <-         exp(log(10)*seq(from=-7   , to=7   , by=0.2))
+# stuff <- c(stuff,exp(log(10)*seq(from=-2.1, to=-0.3, by=0.2)))
+# abline(v=stuff, col="gray")
+
+draw.DataWithError(x=x, y=y1, dy=y1err, col="blue", bars=TRUE, points=TRUE, lines=FALSE) #q
+# draw.DataWithError(x=x, y=y2, dy=y2err, col="green", bars=TRUE, points=TRUE, lines=TRUE) #lambda
+# draw.DataWithError(x=x, y=y3, dy=y3err, col="blue" , bars=FALSE, points=FALSE, lines=TRUE) #omega
+draw.DataWithError(x=x, y=y4, dy=y4err, col="red"  , bars=TRUE, points=TRUE, lines=FALSE) #kappa
+
+# abline(v=c(0.005,0.015,0.150,0.500), lwd=1, col="purple")
+
+
+
+legend("topright", legend = c("q", expression(kappa)), lty = c(1,1), col = c("blue", "red"))
+
+#custom fit
+
+#fit to q:
+# c(5, 0.015, 0.1, 0.08)
+# c(6.4, 0.013, 0.1, 0.035)
+pars1 <- fit.automaticRoutine(startparam=c(6.4, 0.013, 0.1, 0.035), x=x, y=y1, dy=y1err, xrange=c(1e-3,1e2), fn=chisqr_PiecewiseLinAndExpFunction)
+# pars1$par$par <- c(6.4, 0.013, 0.1, 0.045)
+fit.draw(pars1$par, x=x, col="black", lines=TRUE, vlines=FALSE)
+
+#fit to lambda:
+# pars2 <- fit.automaticRoutine(startparam=c(0.5, 0.005, 3, 0.5), x=x, y=y2, dy=y2err, xrange=c(1e-3,1e3), fn=chisqr_PiecewiseLinAndExpFunction)
+# fit.draw(pars2$par, x=x, col="green", lines=TRUE, vlines=FALSE)
+
+#fit to omega:
+# pars3 <- fit.automaticRoutine(startparam=c(0.5, 0.005, 3, 0.5), x=x, y=y3, dy=y3err, xrange=c(1e-3,1e3), fn=chisqr_PiecewiseLinAndExpFunction)
+# fit.draw(pars3$par, x=x, col="blue", lines=FALSE, vlines=FALSE)
+
+# #fit to kappa:
+pars4 <- fit.automaticRoutine(startparam=c(3, 0.005, 0.1, 0.5), x=x, y=y4, dy=y4err, xrange=c(1e-3,1e2), fn=chisqr_PiecewiseLinAndExpFunction)
+fit.draw(pars4$par, x=x, col="black", lines=TRUE, vlines=FALSE)
+
+print_fitRes <- function(varname, par, parErr) {
+  cat("\nFit to ",varname,": \n")
+  cat("A1:    ", par$par[1], "\t +- " , parErr$A1err, "\n")
+  cat("x1:    ", par$par[2], "\t +- " , parErr$X1err, "\n")
+  cat("A2:    ", par$par[3], "\t +- " , parErr$A2err, "\n")
+  cat("x2:    ", par$par[4], "\t +- " , parErr$X2err, "\n")
+  cat("Chi^2: ", par$chi2  , "\t +- " , parErr$chi2err,  "\t , p-value: ", par$pval, "\n")
+}
+print_fitRes("q",pars1$par, pars1$parerr)
+# print_fitRes("lambda",pars2$par, pars2$parerr)
+# # print_fitRes("omega",pars3$par, pars3$parerr)
+print_fitRes("kappa",pars4$par, pars4$parerr)
+rm(print_fitRes)
+
+
+rm(resFrame)
+rm(x, xlim, ylim, y1, y1err, y2, y2err, y3, y3err, y4, y4err)
+rm(plt.data, dim, rho, vol, nPart)
+rm(pars1)
+
+dev.off()
+```
+
+```{r logistic_curve}
+x <- exp(log(10)*seq(from=-3, to=0, by=0.2))
+
+logistic <- function(par, x) {
+  return(par[1] / (1 + exp(-par[2] * (par[3]-x))))
+}
+
+y <- logistic(c(5, 500, 0.020), x)
+
+plot(x,y, type="b", log = "x")
+
+```
+
+
+
+```{r plot_orderParam}
+source("DataFrameHelper.R")
+load(file_name)
+# --------------------------------------------------------------------------------
+dim             <- 2   
+nPart           <- 50
+# --------------------------------------------------------------------------------
+colours <- c("red","green", "blue", "orange", "pink", "magenta")
+observables <- c("lambda", "omega", "q", "kappa")
+obs_id <- c(8,10,4,12)
+y_high <- c(40,2.2,15,3)
+
+z.rho  <- myGetRhoValues(dim=dim, nPart=nPart)
+xlim <- c(1e-4, 1e3)
+
+
+for (j in c(1:length(obs_id))) {
+  ylim <- c(0, y_high[j])
+  plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log="x", main = "", xlab = "T", ylab = observables[j])
+  
+  for (i in c(1:length(z.rho))) {
+    x.beta   <- myGetBetaValues (dim=dim, vol=nPart/z.rho[i], rho=z.rho[i])
+    plt.data <- myGetObservables(dim=dim, vol=nPart/z.rho[i], rho=z.rho[i], beta=x.beta)
+    
+    myPointsLinesErrorsData(1./plt.data$x, plt.data[[obs_id[j]]], plt.data[[obs_id[j]+1]], col=colours[i])
+    
+  }
+  legend("topright", legend=z.rho, col=colours, lty=1)  
+}
+
+# rm(resFrame)
+rm(dim, z.rho)
+```
+
+## deprecated
+
+```{r plot_results_with_fit}
+# --------------------------------------------------------------------------------
+# LOAD RESULTS DATA FRAME FROM DISK
+load(file_name)
+# --------------------------------------------------------------------------------
+# HYPERPARAMETERS:
+d               <- 1    # Number of dimensions
+particleDensity <- 0.5
+vol             <- 2e2  # Volume of space
+nPart <- ceiling(vol * particleDensity)  # Number of particles
+l     <- vol**(1/d)
+# --------------------------------------------------------------------------------
+
+param <- c(1,1) #slope, y-intercept initial values fit parameter, tbd
+
+# --------------------------------------------------------------------------------
+x.beta <- resFrame$beta[which(resFrame$dim==d & resFrame$vol==vol & resFrame$rho==particleDensity)]
+x.beta <- x.beta[!duplicated(x.beta)]
+x.beta <- sort(x.beta[!is.na(x.beta)])
+y.iat <- array(NA, dim= c(length(x.beta), 2)) # [,1]: IAT, [,2]: Standard Error
+
+for (i in c(1:length(x.beta))) {
+  idx <- which(resFrame$dim==d & resFrame$rho==particleDensity & resFrame$vol==vol & resFrame$beta==x.beta[i])
+  if (length(idx)!=0) {
+    y.iat[i,1] <- mean(resFrame$IAT[idx])
+    y.iat[i,2] <- getBootstrapMeanError(resFrame$IAT[idx])
+  }
+}
+
+#----------------------------------------------------------------------------------------------------------------
+#plot fit with error band:
+fit_range <- c(1e-4, 1e1)
+interval_fit <- which(x.beta>=fit_range[1] & x.beta<fit_range[2]) # interval in which a straight line is fitted, tbd
+res_fit <- myFit(param, x.beta[interval_fit], y.iat[interval_fit,1], y.iat[interval_fit,2]) #result parameters fit
+
+xvals <- exp(log(10)*seq(from=-4, to=5, length.out=46)) # x values
+xvals <- xvals[which(xvals>=fit_range[1] & xvals<fit_range[2])]
+fit_line <- res_fit$a*xvals + res_fit$b # fit line
+
+bpars <- myFitErrors(x.beta[interval_fit], y.iat[interval_fit,1], y.iat[interval_fit,2]) # bootstrap replicas for fit parameters
+
+Y <- apply(bpars[ , c(1:2)], MARGIN = 1, FUN = function(parameter, x){parameter[1]*x + parameter[2]}, x=xvals)
+dY <- apply(Y, MARGIN = 1, FUN = sd)
+
+plot(x=NA, y=NA, xlim=c(5e-5, 1e5), ylim = c(5e1, 1e5), log="xy", xlab="1/T", ylab="IAT")
+polygon(x = c(xvals, rev(xvals)), y = c(fit_line+dY, rev(fit_line-dY)), col = "green", border = "green")
+points(x = x.beta, y = y.iat[ ,1])
+arrows(x0=x.beta, y0=y.iat[ ,1]-y.iat[ ,2], x1=x.beta, y1=y.iat[ ,1]+y.iat[ ,2], angle=90, code=3, length=0.05)
+lines(x=xvals, y=fit_line)
+cat("Parameter a: ", res_fit$a, " +- ", sd(bpars[,1]), "\n")
+cat("Parameter b: ", res_fit$b, " +- ", sd(bpars[,2]), "\n")
+cat("Chisqr of fit: ", res_fit$chi2, "\n")
+#----------------------------------------------------------------------------------------------------------------
+
+rm(resFrame)
+rm(x.beta, y.iat, i, d, particleDensity, vol, nPart, l, idx)
+```
+
+
+```{r results_other_observables}
+nPart <- length(MCMC_Single_Run$X[,1])
+cat("nPart = ",nPart)
+
+mean_particle_dist <- mean(MCMC_Single_Run$ParticleDists)
+error_mean_particle_dist <- getBootstrapMeanError(MCMC_Single_Run$ParticleDists, replicaFactor = 3)
+
+mean_nearest_neigh_dist <- mean(MCMC_Single_Run$NearestNeighDists)
+error_mean_nearest_neigh_dist <- getBootstrapMeanError(MCMC_Single_Run$NearestNeighDists, replicaFactor = 3)
+
+mean_number_particles_direct_neigh <- mean(MCMC_Single_Run$NParticlesNeighbourhood)
+error_mean_number_particles_direct_neigh <- getBootstrapMeanError(MCMC_Single_Run$NParticlesNeighbourhood, replicaFactor = 3)
+```
+
+```{r}
+cat("Average Distance between all particles: ", mean_particle_dist, "+-" , error_mean_particle_dist, "\n")
+cat("Average Distance to nearest Neighbour: ", mean_nearest_neigh_dist, "+-" , error_mean_nearest_neigh_dist, "\n")
+cat("Average Number of Particles in direct Neighbourhood: ", mean_number_particles_direct_neigh, "+-" , error_mean_number_particles_direct_neigh, "\n")
+   
+hist(MCMC_Single_Run$ParticleDists)
+hist(MCMC_Single_Run$NearestNeighDists, breaks=50, freq = FALSE)
+hist(MCMC_Single_Run$NParticlesNeighbourhood, breaks=20)
+```
+
+
+
+
+```{r plot_autocorrelation}
+# --------------------------------------------------------------------------------
+# HYPERPARAMETERS:
+dim   <- 2    # Number of dimensions
+nPart <- 50
+rho   <- 0.05
+
+vol   <- nPart / rho
+nIt   <- 1e6  # Number of iterations
+
+type <- "random"
+
+# t     <- 1e+1
+# init_config <- gen_initConfig(type=type, dim=dim, vol=vol, nPart=nPart)
+# MCMC_BurnIn_Run1 <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, N_burnIn=0, init_config$X0, init_config$q)
+
+t     <- 5e-2 
+init_config <- gen_initConfig(type=type, dim=dim, vol=vol, nPart=nPart)
+MCMC_BurnIn_Run2 <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, N_burnIn=0, init_config$X0, init_config$q)
+
+t     <- 1e-3 
+init_config <- gen_initConfig(type=type, dim=dim, vol=vol, nPart=nPart)
+MCMC_BurnIn_Run3 <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, N_burnIn=0, init_config$X0, init_config$q)
+
+
+# show_particles(MCMC_BurnIn_Run$X, init_config$q, vol)
+rm(dim, rho, vol, t, nPart, init_config, type)
+# --------------------------------------------------------------------------------
+```
+
+```{r}
+nIt <- 0.5e5
+x.ticks <- c(1:nIt)
+x.ticks <- x.ticks[which(x.ticks%%1==0)]
+# x.ticks <- c(1e0:nIt)
+
+# E1 <- MCMC_BurnIn_Run1$E
+E2 <- MCMC_BurnIn_Run2$E
+E3 <- MCMC_BurnIn_Run3$E
+
+plot(NA, NA, xlim=c(1,nIt), ylim=c(-1,2), xlab="Markov Chain Step", ylab="Energy", log="")
+lines(x.ticks, E2[x.ticks] - mean(E2[c(round(nIt/2):nIt)]), col="red")
+lines(x.ticks, E3[x.ticks] - mean(E3[c(round(nIt/2):nIt)]), col="blue")
+abline(h=0)
+# abline(v=nIt)
+
+# pdf("burnin_energy.pdf", width=10*0.7, height=6*0.7)
+plot(NA, NA, xlim=c(-5e2,nIt), ylim=c(-21,-15), xlab="Markov Chain Step", ylab="Energy", log="", xaxs="i", yaxs="r")
+# lines(x.ticks, E1[x.ticks], col="red")
+lines(x.ticks, E2[x.ticks], col="red")
+lines(x.ticks, E3[x.ticks], col="blue")
+
+legend("topright", legend = c("T = 0.050", "T = 0.001"), lty = c(1,1), col = c("red", "blue"))
+options(scipen=10)
+# myTicks = axTicks(1)
+# axis(1, at = myTicks, labels = paste(formatC(myTicks, format = 'd'), '', sep = ''))
+
+# plot(NA, NA, xlim=c(1,nIt), ylim=c(-22,2), xlab="Markov Chain Step", ylab="Energy", log="")
+# lines(x.ticks, E3[x.ticks], col="blue")
+# abline(h=0)
+
+# dev.off()
+rm(x.ticks)
+```
+
+```{r}
+nInt             <- 2e5
+lag.max          <- 10000
+acf_range <- c((nIt-nInt):nIt)
+
+E1 <- MCMC_BurnIn_Run1$E
+acf1 <- acf(E1[acf_range], lag.max = lag.max, plot=TRUE)
+
+E2 <- MCMC_BurnIn_Run2$E
+acf2 <- acf(E2[acf_range], lag.max = lag.max, plot=TRUE)
+
+E3 <- MCMC_BurnIn_Run3$E
+acf3 <- acf(E3[acf_range], lag.max = lag.max, plot=TRUE)
+
+rm(nInt, acf_range)
+```
+
+```{r}
+x <- c(1:lag.max)[which((c(1:lag.max)-1) %% 100 == 0)]
+y1<- acf1$acf     [which((c(1:lag.max)-1) %% 100 == 0)]
+y2<- acf2$acf     [which((c(1:lag.max)-1) %% 100 == 0)]
+y3<- acf3$acf     [which((c(1:lag.max)-1) %% 100 == 0)]
+
+plot(NA, xlim=c(0,lag.max), ylim=c(-0.45 ,1), xlab="Lag", ylab="ACF")
+lines(x, y1, col="red")
+lines(x, y2, col="green")
+lines(x, y3, col="blue")
+abline(h=0)
+
+
+plot(NA, xlim=c(1,nIt), ylim=c(-30,10), xlab="Markov Chain Step", ylab="Energy")
+lines(x, E1, col="red")
+lines(x, E2, col="green")
+lines(x, E3, col="blue")
+abline(h=0)
+
+rm(x,y1,y2,y3)
+```

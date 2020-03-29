@@ -37,26 +37,54 @@ N     <- length(x)
 
 v1  <- 1/x
 v2  <- 1/x**8
+v1L <- 1/x**12
+v2L <- -1/x**6
 
-yhigh <- 5
-ylow  <- -5
+yhigh <- 6
+ylow  <- -2
 
-par(pty="s")
+# par(pty="s")
 
-pdf("pairpotential_repulsion.pdf")
-plot (x,  v1+v2, type='l', col='black', lwd=2, lty=1, ylim=c(ylow,yhigh), xlab='|r|', ylab='V')
-lines(x,  v1   , type='l', col='red'  , lwd=2, lty=3)
-lines(x,  v2   , type='l', col='blue' , lwd=2, lty=3)
+# pdf("pairpotential_repulsion.pdf")
+plot (x,  -v1+v2, type='l', col='green', lwd=2, lty=1, ylim=c(ylow,yhigh), xlab='|r|', ylab='V', xaxs = "i")
+lines(x,  v1L+v2L   , type='l', col='red'  , lwd=2, lty=1)
+lines(x,  v1+v2   , type='l', col='red'  , lwd=2, lty=1)
+# lines(x,  v1   , type='l', col='red'  , lwd=2, lty=3)
+# lines(x,  v2   , type='l', col='blue' , lwd=2, lty=3)
 abline(h=0)
-legend(0.8, -2, legend=c("Pair Potential V", "Coulomb Repulsion", "Hard Shell"),col=c("black", "red", "blue"), lty=c(1,3,3))
-dev.off()
+# legend("topright", legend=c("Pair Potential V", "Coulomb Repulsion", "Hard Shell"),col=c("black", "red", "blue"), lty=c(1,3,3))
+legend("topright", legend=c("Pair Potential V", "Lennard-Jones-Potential"),col=c("green", "red"), lty=c(1,3,3))
+# dev.off()
 
-pdf("pairpotential_attraction.pdf")
+# pdf("pairpotential_attraction.pdf")
 plot (x, -v1+v2, type='l', col='black', lwd=2, lty=1, ylim=c(ylow,yhigh), xlab='|r|', ylab='V')
 lines(x, -v1   , type='l', col='red'  , lwd=2, lty=3)
 lines(x,  v2   , type='l', col='blue' , lwd=2, lty=3)
 abline(h=0)
 legend(0.8, -2, legend=c("Pair Potential V", "Coulomb Attraction", "Hard Shell"),col=c("black", "red", "blue"), lty=c(1,3,3))
+# dev.off()
+```
+```{r Lennard-Jones-Potential}
+step  <- 0.01
+x     <- seq(from=0, to=3, by=step)
+N     <- length(x)
+
+v1  <- 1/x
+v2  <- 1/x**8
+v1L <- 1/x**12
+v2L <- -1/x**6
+
+yhigh <- 6
+ylow  <- -2
+
+# par(pty="s")
+
+pdf("lennard_jones_potential.pdf", width = 10*0.7, height = 6*0.7)
+plot (x,  -v1+v2, type='l', col='blue', lwd=2, lty=1, ylim=c(ylow,yhigh), xlab='|r|', ylab='V', xaxs = "i")
+abline(h=0, lty=3)
+lines(x,  v1L+v2L   , type='l', col='orange'  , lwd=2, lty=1)
+lines(x,  v1+v2   , type='l', col='red'  , lwd=2, lty=1)
+legend("topright", legend=c("Attractive Pair Potential ", "Repulsive Pair Potential" , "Lennard-Jones Potential"),col=c("blue", "red", "orange"), lty=c(1,1,1))
 dev.off()
 ```
 
