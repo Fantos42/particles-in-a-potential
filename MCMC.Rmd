@@ -101,9 +101,9 @@ run_no <- max(resFrame$RUN_ID, na.rm=TRUE)+1
 # 2D: nPart <- 50, rho <- 0.05
 # 3D: nPart <- 64, rho <- 0.01
 # HYPERPARAMETERS:
-dim             <- 1
-nPart           <- 50
-rho             <- 0.1
+dim             <- 3
+nPart           <- 64
+rho             <- 0.01
 
 nIt             <- 0.5e6
 nResamples      <- 10
@@ -172,9 +172,9 @@ load(file_name)
 # options(warn=-1)
 # options(warn=0)
 # --------------------------------------------------------------------------------
-dim             <- 2
-nPart           <- 50
-rho             <- 0.05
+dim             <- 3
+nPart           <- 64
+rho             <- 0.01
 vol             <- nPart/rho
 # --------------------------------------------------------------------------------
 x.beta <- myGetBetaValues(dim=dim, vol=vol, rho=rho)
@@ -199,7 +199,7 @@ xlim <- c(1e-3, 1e0)
 ylim <- c(0, max(y1+y1err, y4+y4err, na.rm=TRUE))
 # ylim <- c(0, max(y1+y1err, y2+y2err, y3+y3err, y4+y4err, na.rm=TRUE))
 
-# pdf("plot.pdf", width = 10*0.7, height = 6*0.7)
+pdf("paramplot_d2_rho005_n50.pdf", width = 10*0.7, height = 6*0.7)
 plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log="x", main = "", xlab = "T", ylab = "Value")
 # axis(1, at=axTicks(1), labels=paste(formatC(axTicks(1)/1000, format = 'd', 'kb')))
 
@@ -207,21 +207,24 @@ plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log="x", main = "", xlab = "T", y
 # stuff <- c(stuff,exp(log(10)*seq(from=-2.1, to=-0.3, by=0.2)))
 # abline(v=stuff, col="gray")
 
-draw.DataWithError(x=x, y=y1, dy=y1err, col="black", bars=TRUE, points=TRUE, lines=TRUE) #q
+draw.DataWithError(x=x, y=y1, dy=y1err, col="blue", bars=TRUE, points=TRUE, lines=FALSE) #q
 # draw.DataWithError(x=x, y=y2, dy=y2err, col="green", bars=TRUE, points=TRUE, lines=TRUE) #lambda
 # draw.DataWithError(x=x, y=y3, dy=y3err, col="blue" , bars=FALSE, points=FALSE, lines=TRUE) #omega
-draw.DataWithError(x=x, y=y4, dy=y4err, col="red"  , bars=TRUE, points=TRUE, lines=TRUE) #kappa
+draw.DataWithError(x=x, y=y4, dy=y4err, col="red"  , bars=TRUE, points=TRUE, lines=FALSE) #kappa
 
 # abline(v=c(0.005,0.015,0.150,0.500), lwd=1, col="purple")
 
 
 
-legend("topright", legend = c("q", expression(kappa)), lty = c(1,1), col = c("black", "red"))
+legend("topright", legend = c("q", expression(kappa)), lty = c(1,1), col = c("blue", "red"))
 
 #custom fit
 
 #fit to q:
-pars1 <- fit.automaticRoutine(startparam=c(5, 0.015, 0.1, 0.08), x=x, y=y1, dy=y1err, xrange=c(1e-3,1e3), fn=chisqr_PiecewiseLinAndExpFunction)
+# c(5, 0.015, 0.1, 0.08)
+# c(6.4, 0.013, 0.1, 0.035)
+pars1 <- fit.automaticRoutine(startparam=c(6.4, 0.013, 0.1, 0.035), x=x, y=y1, dy=y1err, xrange=c(1e-3,1e2), fn=chisqr_PiecewiseLinAndExpFunction)
+# pars1$par$par <- c(6.4, 0.013, 0.1, 0.045)
 fit.draw(pars1$par, x=x, col="black", lines=TRUE, vlines=FALSE)
 
 #fit to lambda:
@@ -233,8 +236,8 @@ fit.draw(pars1$par, x=x, col="black", lines=TRUE, vlines=FALSE)
 # fit.draw(pars3$par, x=x, col="blue", lines=FALSE, vlines=FALSE)
 
 # #fit to kappa:
-pars4 <- fit.automaticRoutine(startparam=c(3, 0.005, 0.1, 0.5), x=x, y=y4, dy=y4err, xrange=c(1e-3,1e3), fn=chisqr_PiecewiseLinAndExpFunction)
-fit.draw(pars4$par, x=x, col="red", lines=TRUE, vlines=FALSE)
+pars4 <- fit.automaticRoutine(startparam=c(3, 0.005, 0.1, 0.5), x=x, y=y4, dy=y4err, xrange=c(1e-3,1e2), fn=chisqr_PiecewiseLinAndExpFunction)
+fit.draw(pars4$par, x=x, col="black", lines=TRUE, vlines=FALSE)
 
 print_fitRes <- function(varname, par, parErr) {
   cat("\nFit to ",varname,": \n")
@@ -256,7 +259,7 @@ rm(x, xlim, ylim, y1, y1err, y2, y2err, y3, y3err, y4, y4err)
 rm(plt.data, dim, rho, vol, nPart)
 rm(pars1)
 
-# dev.off()
+dev.off()
 ```
 
 ```{r logistic_curve}
