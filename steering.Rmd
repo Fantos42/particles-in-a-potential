@@ -1,13 +1,15 @@
 ---
-title: 'MCMC for particles in a potential'
+title: 'Steering File for the MCMC for Particles in a Potential Analysis'
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-source("MCMC_functions.R")
-source("DataFrameHelper.R")
+# Source helper 
+source("Helper.R")
+
+source("MCMC_functions.R") 
 ```
 
 

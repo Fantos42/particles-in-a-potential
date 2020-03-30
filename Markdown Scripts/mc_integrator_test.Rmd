@@ -81,11 +81,3 @@ lines(seq(-1,+1,by=0.05),(1-seq(-1,+1,by=0.05)**2), col='green')
 Problem: With a Markov Chain we can sample from \(\sim (1-x^2) \) while not knowing the normalization constant for the probability distribution. In red the normalized distribution is shown, while in green our target function is plotted. The difference between those two is exactly our normalization constant.
 
 A priori we do not know the normalization constant and we have no elegant way of extracting the difference. One could fit the empirical distribution to the green curve to get an estimate, but it is not clear how this scales to higher dimensions and more complicated functions.
-
-```{r}
-hist(y, freq = FALSE)
-
-print(mean(y))
-print(sqrt(var(y)/N))
-
-```

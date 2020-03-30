@@ -1,4 +1,15 @@
 // [[Rcpp::plugins("cpp11")]]
+
+// ---------------------------------------------------------------------------
+// MCMC_varyAll.cpp is an alternative, though deprecated by now, version
+// MCMC_functions.cpp in which we implemented a sampling variant of the
+// Random-Walk Metropolis algorithm that we developed ourselves. The idea
+// was to shift all particles at once a little bit, instead of shifting single
+// particles in succession. It's efficiency prooved to be worse than the simple
+// approach while also requiring a lot more computation power. Because of this
+// the ansatz was discarded.
+// ---------------------------------------------------------------------------
+
 #include <Rcpp.h>
 #include <vector>
 using namespace Rcpp;
@@ -12,20 +23,20 @@ double IAT_CPP(NumericVector x){
   const int n = x.size(); //number of particles
   std::vector<double> X (n, 0);
   for (int i = 0; i < n; i++) X [i] = x(i);
-  
+
   const int maxlag = std::max(3., n/2.);
-  
+
   double mu = 0;
   for (int i = 0; i < n; i++) mu += X[i];
   mu /= n;
-  
+
   double Ga0 = 0;
   double Ga1 = 0;
   double Ga2 = 0;
   double Ga3 = 0;
-  
+
   double lg;
-  
+
   lg = 0;
   for (int i = lg; i < n; i++) Ga0 += (X[i-lg] - mu) * (X[i] - mu) / (n-lg-1.);
   lg = 1;
@@ -34,9 +45,9 @@ double IAT_CPP(NumericVector x){
   for (int i = lg; i < n; i++) Ga2 += (X[i-lg] - mu) * (X[i] - mu) / (n-lg-1.);
   lg = 3;
   for (int i = lg; i < n; i++) Ga3 += (X[i-lg] - mu) * (X[i] - mu) / (n-lg-1.);
-  
+
   double Ga [] = {Ga0+Ga1, Ga2+Ga3};
-  
+
   double m = 1;
   double IAT = Ga[0];
   while ( (Ga[1]>0.0) && (Ga[1] < Ga[0] || Ga[1]>0.1) ) {
@@ -66,7 +77,7 @@ double IAT_CPP(NumericVector x){
 double E_CPP(NumericMatrix x, NumericVector q){
   int n = q.size(); //number of particles
   int d = x.ncol(); //dimensions
-  
+
   double a = 0;
   double b = 0;
   double sum = 0;
@@ -77,7 +88,7 @@ double E_CPP(NumericMatrix x, NumericVector q){
         sum += (x(i,k) - x(j,k))*(x(i,k) - x(j,k));
       }
       a += q[i] * q[j] / sqrt(sum);
-      b += 1 / pow(sum, 4); 
+      b += 1 / pow(sum, 4);
     }
   }
   return (a+b);
@@ -85,7 +96,7 @@ double E_CPP(NumericMatrix x, NumericVector q){
 double E_CPP(std::vector<std::vector<double>> x, NumericVector q){
   int n = q.size(); //number of particles
   int d = x[0].size(); //dimensions
-  
+
   double a = 0;
   double b = 0;
   double sum = 0;
@@ -96,7 +107,7 @@ double E_CPP(std::vector<std::vector<double>> x, NumericVector q){
         sum += (x[i][k] - x[j][k])*(x[i][k] - x[j][k]);
       }
       a += q[i] * q[j] / sqrt(sum);
-      b += 1 / pow(sum, 4); 
+      b += 1 / pow(sum, 4);
     }
   }
   return (a+b);
@@ -108,21 +119,21 @@ double E_CPP(std::vector<std::vector<double>> x, NumericVector q){
 
 int getFreeIndex(std::vector<int> idx, int k) {
   const int nPart = idx.size();
-  
+
   for (int i = 0; i < nPart; i++) {
     if (idx[i]==1) k--;
-    
+
     if (k == 0) {
       return i;
     }
   }
-  
+
   return -1;
 }
 
 double getDist(std::vector<double> a, std::vector<double> b) {
   const int dim = a.size();
-  
+
   double dist = 0;
   for (int i = 0; i < dim; i++) {
     dist += (a[i] - b[i])*(a[i] - b[i]);
@@ -132,23 +143,23 @@ double getDist(std::vector<double> a, std::vector<double> b) {
 
 double estimate_clstSize(std::vector<std::vector<double>> X) {
   const int nPart = X.size();
-  
+
   const double min_dist = 2;
-  
+
   std::vector<std::vector<int>> clusters;
   std::vector<int>              cluster_sizes;
-  
+
   std::vector<int> idx(nPart, +1);
   int nFree = nPart;
-  
-  
-  while (nFree > 0) 
+
+
+  while (nFree > 0)
   {
     // Choose first free particle for new cluster
     int k = -1;
-    for (int i = 0; i < nPart; i++) 
+    for (int i = 0; i < nPart; i++)
     {
-      if (idx[i] == 1) 
+      if (idx[i] == 1)
       {
         k = i;
         idx[i] = 0;
@@ -156,23 +167,23 @@ double estimate_clstSize(std::vector<std::vector<double>> X) {
         break;
       }
     }
-    
+
     // Create new cluster vector
     std::vector<int> temp (nPart, -1);
     clusters.push_back(temp);
     clusters.back()[0] = k;
     cluster_sizes.push_back(1);
-    
-    
+
+
     // Iterate through all cluster particles and look for neighbours.
-    for (int j = 0; j < cluster_sizes.back(); j++) 
+    for (int j = 0; j < cluster_sizes.back(); j++)
     {
       const int clst_idx =clusters.back()[j];
       // Add all neighbours of particle j.
-      for (int k = 0; k < nFree; k++) 
+      for (int k = 0; k < nFree; k++)
       {
         int free_idx = getFreeIndex(idx, k+1);
-        
+
         if (getDist(X[clst_idx], X[free_idx]) < min_dist) {
           clusters.back()[cluster_sizes.back()]  = free_idx;
           cluster_sizes.back()  += 1; // Current cluster has grown by 1
@@ -180,17 +191,17 @@ double estimate_clstSize(std::vector<std::vector<double>> X) {
           nFree                 -= 1; // One further particle is assigned to a cluster
           //k                     -= 1; // Neccessary for correct procedure
         }
-        
+
       }
     }
   }
-  
+
   // Calc mean cluster size and return
   double mean_size = 0;
   for (unsigned int i = 0; i < cluster_sizes.size(); i++) {
     mean_size += cluster_sizes[i];
   }
-  
+
   return mean_size/cluster_sizes.size();
 }
 
@@ -202,20 +213,20 @@ Rcpp::List MCMC_CPP_varyAll(int nIt, int nPart, double vol, double t, double sig
   int d = X0(1,Rcpp::_).size();
   const double l = std::pow(vol, 1./d);
   const double t0= t;
-  
+
   const double T_burnIn_1 = 1e5;
   const double T_burnIn_2 = 1e5;
   // ----------------------- Observables
   NumericVector E(nIt, 0.0);
   E[0] = E_CPP(X0, q);
-  
+
   const int N_clstSize_samples = 10;
   int k_clstSize               = 0;
   const int n_min_clstSize           = nIt-1e4;
   std::vector<double> clstSize(N_clstSize_samples, -1);
   const double stp_clstSize    = (nIt - n_min_clstSize)/N_clstSize_samples;
   // -----------------------
-  
+
   std::vector<std::vector<double>> X(nPart, std::vector<double>(d,0));
   for (int i = 0; i < nPart; i++) {
     for (int j = 0; j < d; j++) {
@@ -227,7 +238,7 @@ Rcpp::List MCMC_CPP_varyAll(int nIt, int nPart, double vol, double t, double sig
     // ---------------------------------------------------------------------------
     // Make new candidates (Save old coordinates in case of rejection)
     std::vector<std::vector<double>> old_x = X;
-    
+
     for (int j = 0; j < nPart; j++) {
       std::vector<double> shift_vec(d,0);
       if (d == 1) {
@@ -244,7 +255,7 @@ Rcpp::List MCMC_CPP_varyAll(int nIt, int nPart, double vol, double t, double sig
         shift_vec = {cos(phi*M_PI)*sin(theta*M_PI)*r, sin(phi*M_PI)*sin(theta*M_PI)*r, cos(theta*M_PI)*r};
       }
       for(int i=0; i < d; i++){
-        X[j][i] += shift_vec[i]; 
+        X[j][i] += shift_vec[i];
         // Periodic boundary wrap
         if      (X[j][i] < -l/2) X[j][i] += l;
         else if (X[j][i] > +l/2) X[j][i] -= l;
@@ -258,7 +269,7 @@ Rcpp::List MCMC_CPP_varyAll(int nIt, int nPart, double vol, double t, double sig
     } else {
       t = t0;
     }
-    
+
     if (R::runif(0,1) < std::exp(-1./t * (E[n]-E[n-1]))) {
       //X = Y;
       if (n > T_burnIn_2) accept_rate += 1;
@@ -274,21 +285,21 @@ Rcpp::List MCMC_CPP_varyAll(int nIt, int nPart, double vol, double t, double sig
     // ---------------------------------------------------------------------------
   }
   //Rcout << "Acceptance: " << accept_rate/nIt*100. << "%" << std::endl;
-  
-  
+
+
   for (int i = 0; i < nPart; i++) {
     for (int j = 0; j < d; j++) {
       X0(i,j) = X[i][j];
     }
   }
-  
+
   // Calc mean cluster size
   double mean_size = 0;
   for (unsigned int i = 0; i < clstSize.size(); i++) {
     mean_size += clstSize[i];
   }
   mean_size = mean_size/clstSize.size();
-  
+
   Rcpp::List rList = Rcpp::List::create(Named("dE")=E, Named("X")=X0, Named("Accpetance")=accept_rate/(nIt-T_burnIn_2), Named("MeanClusterSize")=mean_size);
   return rList;
 }
