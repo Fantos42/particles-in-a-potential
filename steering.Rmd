@@ -3,95 +3,96 @@ title: 'Steering File for the MCMC for Particles in a Potential Analysis'
 output: html_document
 ---
 
+This steering script is used to analyse the particles in a potential system. It is intended to be used in a notebook style. Knitting the .html does not work currently for us, because it does not compile Rcpp code correctly.
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-# Source helper 
+library(Rcpp)
+
+# Source helper functions
 source("Helper.R")
-
-source("MCMC_functions.R") 
+# Source R functions related to the Markov chain
+source("MCMC_functions.R")
+# Source Rcpp functions related to the Markov chain. Mind the correct path!
+sourceCpp("C:/Ubuntu Subsystem Folder/particles-in-a-potential/MCMC_functions.cpp")
 ```
 
-
-```{r single_simulation}
+Simulate a single run of the Markov chain and evaluate it
+```{r MCMC_Simulation_Single}
 # --------------------------------------------------------------------------------
-# HYPERPARAMETERS:
-dim             <- 4    # Number of dimensions
-nPart           <- 81
-rho             <- 0.005
-t               <- 0.0001  # Temperature of heat bath
+# Only change these parameters:
+# EXTERIOR PARAMETERS:
+dim             <- 2     # Number of dimensions
+nPart           <- 49    # Number of simulated particles
+rho             <- 0.05  # Particle Density
+t               <- 3e-1  # Temperature of heat bath
+# SIMULATION PARAMETERS:
+nIt             <- 2e6   # Number of Markov chain iterations
+start_type      <- "ordered" # Start configuration type (ordered / random)
+# Other parameters:
+showConfigBefore<- TRUE
+showConfigAfter <- TRUE
+saveConfigAfter <- FALSE
+saveConfigAfterAs <- "configuration.pdf"
+# --------------------------------------------------------------------------------
 
 
-nIt             <- 2e6  # Number of iterations
-# nIt             <- 1
-beta            <- 1/t
 
-vol   <- nPart / rho
-l     <- vol**(1/dim)
+# Do not touch below here.
 # --------------------------------------------------------------------------------
-# Start configuration: (type="ordered" or type="random")
-type <- "ordered"
-init_config <- gen_initConfig(type=type, dim=dim, vol=vol, nPart=nPart)
-X0 <- init_config$X0
-q  <- init_config$q
-rm(init_config)
-# show_particles(X0, q, vol)
+# Generate start configuration: (type="ordered" or type="random")
+init_config <- gen_initConfig(type=start_type, dim=dim, vol=nPart/rho, nPart=nPart)
 # --------------------------------------------------------------------------------
-cat("Run MCMC particles in a potential . .\n")
-
-start_time <- Sys.time()
-MCMC_Single_Run <- MCMC_CPP(nIt, nPart, vol, t, sigma=1, N_burnIn=0, X0, q)
-end_time <- Sys.time()
+if (showConfigBefore) show_particles(init_config$X0, init_config$q, nPart/rho)
+timer.start <- Sys.time()
+# Start the MCMC simulation
+MCMC_Single_Run <- MCMC_CPP(nIt, nPart, nPart/rho, t, sigma=1, N_burnIn=0, init_config$X0, init_config$q)
+timer.end   <- Sys.time()
+if (showConfigAfter) {
+  if (saveConfigAfter) pdf("config_rho010_t0001.pdf", width=10*0.55, height=10*0.55)
+  show_particles(MCMC_Single_Run$X, init_config$q, nPart/rho)
+  if (saveConfigAfter) dev.off()
+}
 # --------------------------------------------------------------------------------
-# pdf("config_rho010_t0001.pdf", width=10*0.55, height=10*0.55)
-# show_particles(MCMC_Single_Run$X, q, vol)
-# dev.off()
-# --------------------------------------------------------------------------------
-cat("Number of {positive, negative} particles: {", length(which(q==+1)), ",", length(which(q==-1)),"}\n")
-cat("Runtime: ",as.double(t2<- end_time - start_time, units='secs'),"\n")
+# Output of some observables:
+cat("Number of {positive, negative} particles: {", length(which(init_config$q==+1)), ",", length(which(init_config$q==-1)),"}\n")
+cat("Runtime: ",as.double(timer.end - timer.start, units='secs'),"\n")
 cat("Acceptrate: ", MCMC_Single_Run$Accpetance*100,"%\n")
-cat("q: ", mean(MCMC_Single_Run$q), "\n")
-cat("Omega: ", mean(MCMC_Single_Run$omega), "\n")
-cat("Lambda: ", mean(MCMC_Single_Run$lambda), "\n")
-cat("Kappa: ", mean(MCMC_Single_Run$kappa), "\n")
-# print(MCMC_Single_Run$X)
-# print(vol**(1/dim)/2)
+cat("Average cluster size: q= ", mean(MCMC_Single_Run$q), "\n")
+cat("Average minimal distance to nearest neighbour: Omega= ", mean(MCMC_Single_Run$omega), "\n")
+cat("Average distance between particles: Lambda= ", mean(MCMC_Single_Run$lambda), "\n")
+cat("Average number of direct neighbours: Kappa= ", mean(MCMC_Single_Run$kappa), "\n")
 # --------------------------------------------------------------------------------
-rm(dim, rho, vol, beta, t, nPart, l, X0, q, start_time, end_time, t2, type, nIt)
+rm(init_config, dim, nPart, rho, saveConfigAfter, saveConfigAfterAs, showConfigAfter, showConfigBefore, start_type, t, timer.start, timer.end)
 # --------------------------------------------------------------------------------
 ```
 
-```{r evaluation_acf}
-nIt             <- 0.5e6
-E <- cumsum(MCMC_Single_Run$E)
-print(E)
-# # E <- MCMC_Single_Run$dE
-# # print(MCMC_Single_Run$dE)
-# x.ticks <- c(1e1:nIt)
-# # plot(x=x.ticks,y=E[x.ticks],type='l',log='')
-# # plot(x=x.ticks,y=E[x.ticks]+abs(min(E[x.ticks]))+1,type='l',log='y')
-# rm(x.ticks)
-# 
-# acf_range <- c((nIt-1e5):nIt)
-# start_time <- Sys.time()
-# # acf(E[acf_range], lag.max = 50000)
-# cat("ACF runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
-# 
-# acf_range <- c((nIt-3e5):nIt)
-# start_time <- Sys.time()
-# cat("IAT_custom: ",IAT_CPP(E[acf_range]),"\n")
-# cat("IAT runtime: ", as.double(Sys.time() - start_time, units='secs')," seconds \n")
-rm(nIt)
+```{r MCMC_Simulation_Single_Evaluation}
+E <- MCMC_Single_Run$E
+x.ticks <- c(1e1:nIt)
+plot(x=x.ticks,y=E[x.ticks],type='l',log='')
+rm(x.ticks)
+
+acf_range <- c((nIt-1e5):nIt)
+acf(E[acf_range], lag.max = 50000)
+
+cat("IAT = ",IAT_CPP(E[acf_range]),"\n")
+rm(acf_range)
 ```
 
+
+
+Create a new dataframe which will store the results of multiple runs and which will be written to the hard drive.
 ```{r}
-file_name <- "MCMC_Results_4D.RData"
+file_name <- "MCMC_Results.RData"
 
-# myCreateNewFrame(file_name)
+# myCreateNewFrame(file_name) # BE CAREFULL NOT TO ACCIDENTALLY OVERWRITE EXISTING FILE
 
 myShowContentOverview(file_name)
 ```
 
+This code chunk simulates nResamples many Markov Chain Monte Carlo runs for length(x.T) many temperaturs and saves it in the dataframe to disk.
 ```{r MCMC_Swipe}
 # --------------------------------------------------------------------------------
 # LOAD RESULTS DATA FRAME FROM DISK
@@ -99,62 +100,60 @@ load(file_name)
 run_no <- max(resFrame$RUN_ID, na.rm=TRUE)+1
 # --------------------------------------------------------------------------------
 # Standard Sets:
-# 1D: nPart <- 50, rho <- 0.1
+# 1D: nPart <- 50, rho <- 0.10
 # 2D: nPart <- 50, rho <- 0.05
 # 3D: nPart <- 64, rho <- 0.01
-# HYPERPARAMETERS:
-dim             <- 4
-nPart           <- 81
-rho             <- 0.001
-
-nIt             <- 0.5e6
-nResamples      <- 5
-
-sct             <- "ordered"
-# --------------------------------------------------------------------------------
-# Betas To Calculate
+# EXTERIOR PARAMETERS:
+dim             <- 2
+nPart           <- 50
+rho             <- 0.05
 x.T <- exp(log(10)*seq(from=-3.2, to=1.2, by=0.2))
 x.T <- c(x.T, exp(log(10)*seq(from=-2.1, to=-0.3, by=0.05))) # More detail in transition region
+# SIMULATION PARAMETERS
+nIt             <- 0.5e6
+nResamples      <- 5
+sct             <- "ordered"
+# --------------------------------------------------------------------------------
 
+
+
+
+
+# --------------------------------------------------------------------------------
 lowerBound <- 1e-2
 upperBound <- 1e-1
 # x.T <- x.T[which(x.T>=lowerBound)]
 # x.T <- x.T[which(x.T< upperBound)]
 x.T <- sort(x.T)
-
 x.T <- x.T[!duplicated(round(x.T,8))]
 
-# x.T <- x.T[which(c(1:length(x.T))%%2==0)]
-# x.T <- x.T[which(c(1:length(x.T))%%2==0)]
-# x.T <- x.T[which(c(1:length(x.T))%%2==0)]
-# x.T <- x.T[which(c(1:length(x.T))%%2==0)]
-# x.T <- x.T[which(c(1:length(x.T))%%2==0)]
+x.T <- x.T[which(c(1:length(x.T))%%2==0)] # Each of those reduce the amount
+x.T <- x.T[which(c(1:length(x.T))%%2==1)] # of simulated temperatures in
+# x.T <- x.T[which(c(1:length(x.T))%%2==0)] # half for more rough swipes
 
-x.beta <- 1/x.T
 # --------------------------------------------------------------------------------
 
-resFrame <- myMCMCSwipe(dim=dim, nPart=nPart, rho=rho, sigma=1, sct=sct, nIt=nIt, nResamples=nResamples, x.beta=x.beta, df=resFrame)
+resFrame <- myMCMCSwipe(dim=dim, nPart=nPart, rho=rho, sigma=1, sct=sct, nIt=nIt, nResamples=nResamples, x.beta=1/x.T, df=resFrame)
 
 save(resFrame, file=file_name)
 rm(resFrame)
 
-rm(run_no, dim, nPart, rho, nIt, nResamples, x.beta, x.T, lowerBound, upperBound)
+rm(run_no, dim, nPart, rho, nIt, nResamples, x.T, lowerBound, upperBound, sct)
 ```
 
-
+This code chunk loads the data for the requested exterior parameters from the given dataframe and plots the data for the q, kappa parameters (as well as the omega and lambda parameters).
 ```{r plot_orderParam}
-source("DataFrameHelper.R")
 load(file_name)
 # --------------------------------------------------------------------------------
+# EXTERIOR PARAMETERS:
 dim             <- 2
 nPart           <- 50
 rho             <- 0.05
-vol             <- nPart/rho
 # --------------------------------------------------------------------------------
-x.beta <- myGetBetaValues(dim=dim, vol=vol, rho=rho)
+x.beta <- myGetBetaValues(dim=dim, vol=nPart/rho, rho=rho)
 # x.beta <- x.beta[which(x.beta>3e0)]
 
-plt.data <- myGetObservables(dim=dim, vol=vol, rho=rho, beta=x.beta)
+plt.data <- myGetObservables(dim=dim, vol=nPart/rho, rho=rho, beta=x.beta)
 rm(x.beta)
 
 myPlotData(1/plt.data$x, plt.data$y.q, plt.data$y.q_Err)
@@ -164,241 +163,67 @@ myPlotData(1/plt.data$x, plt.data$y.omega , plt.data$y.omega_Err )
 myPlotData(1/plt.data$x, plt.data$y.kappa , plt.data$y.kappa_Err )
 
 rm(resFrame)
-rm(plt.data, dim, rho, vol)
+rm(plt.data, dim, rho)
 ```
 
-```{r plots}
-source("DataFrameHelper.R")
+This chunk generates the q+kappa plots and fits a function to the datapoints.
+```{r q_kappa_plots_with_fit}
 load(file_name)
-
-# options(warn=-1)
-# options(warn=0)
 # --------------------------------------------------------------------------------
-dim             <- 4
-nPart           <- 81
-rho             <- 0.001
-vol             <- nPart/rho
+dim             <- 2
+nPart           <- 50
+rho             <- 0.05
 # --------------------------------------------------------------------------------
-x.beta <- myGetBetaValues(dim=dim, vol=vol, rho=rho)
+x.beta <- myGetBetaValues(dim=dim, vol=nPart/rho, rho=rho)
 
-plt.data <- myGetObservables(dim=dim, vol=vol, rho=rho, beta=x.beta)
+plt.data <- myGetObservables(dim=dim, vol=nPart/rho, rho=rho, beta=x.beta)
 rm(x.beta)
 
 #plot custom
 x <- 1/plt.data$x     
-y1    <- plt.data$y.q         * 0.1
-y1err <- plt.data$y.q_Err     * 0.1
-y2    <- plt.data$y.lambda    * 0.1
-y2err <- plt.data$y.lambda_Err* 0.1
-y3    <- plt.data$y.omega     * 1.0
-y3err <- plt.data$y.omega_Err * 1.0
-y4    <- plt.data$y.kappa     * 1.0
-y4err <- plt.data$y.kappa_Err * 1.0
+yq    <- plt.data$y.q         * 0.1
+yqerr <- plt.data$y.q_Err     * 0.1
+yk    <- plt.data$y.kappa     * 1.0
+ykerr <- plt.data$y.kappa_Err * 1.0
 
 
 xlim <- c(1e-5, 1e5)
 xlim <- c(1e-3, 1e0)
-ylim <- c(0, max(y1+y1err, y4+y4err, na.rm=TRUE))
-# ylim <- c(0, max(y1+y1err, y2+y2err, y3+y3err, y4+y4err, na.rm=TRUE))
+ylim <- c(0, max(yq+yqerr, yk+ykerr, na.rm=TRUE))
 
-# pdf("paramplot_d2_rho005_n50.pdf", width = 10*0.7, height = 6*0.7)
 plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log="x", main = "", xlab = "T", ylab = "Value")
-# axis(1, at=axTicks(1), labels=paste(formatC(axTicks(1)/1000, format = 'd', 'kb')))
 
-# stuff <-         exp(log(10)*seq(from=-7   , to=7   , by=0.2))
-# stuff <- c(stuff,exp(log(10)*seq(from=-2.1, to=-0.3, by=0.2)))
-# abline(v=stuff, col="gray")
-
-draw.DataWithError(x=x, y=y1, dy=y1err, col="blue", bars=TRUE, points=TRUE, lines=FALSE) #q
-# draw.DataWithError(x=x, y=y2, dy=y2err, col="green", bars=TRUE, points=TRUE, lines=TRUE) #lambda
-# draw.DataWithError(x=x, y=y3, dy=y3err, col="blue" , bars=FALSE, points=FALSE, lines=TRUE) #omega
-draw.DataWithError(x=x, y=y4, dy=y4err, col="red"  , bars=TRUE, points=TRUE, lines=FALSE) #kappa
-
-# abline(v=c(0.005,0.015,0.150,0.500), lwd=1, col="purple")
-
-
+draw.DataWithError(x=x, y=yq, dy=yqerr, col="blue", bars=TRUE, points=TRUE, lines=FALSE) #q
+draw.DataWithError(x=x, y=yk, dy=ykerr, col="red"  , bars=TRUE, points=TRUE, lines=FALSE) #kappa
 
 legend("topright", legend = c("q", expression(kappa)), lty = c(1,1), col = c("blue", "red"))
 
-#custom fit
+# Fit of function to the data points:
+# Fit to q: (initial parameters may have to be adjusted to guarantee convergence)
+parsq <- fit.automaticRoutine(startparam=c(6.4, 0.013, 0.1, 0.035), x=x, y=yq, dy=yqerr, xrange=c(1e-3,1e2), fn=chisqr_PiecewiseLinAndExpFunction)
+fit.draw(parsq$par, x=x, col="black", lines=TRUE, vlines=FALSE)
 
-#fit to q:
-# c(5, 0.015, 0.1, 0.08)
-# c(6.4, 0.013, 0.1, 0.035)
-pars1 <- fit.automaticRoutine(startparam=c(6.4, 0.013, 0.1, 0.035), x=x, y=y1, dy=y1err, xrange=c(1e-3,1e2), fn=chisqr_PiecewiseLinAndExpFunction)
-# pars1$par$par <- c(6.4, 0.013, 0.1, 0.045)
-fit.draw(pars1$par, x=x, col="black", lines=TRUE, vlines=FALSE)
-
-#fit to lambda:
-# pars2 <- fit.automaticRoutine(startparam=c(0.5, 0.005, 3, 0.5), x=x, y=y2, dy=y2err, xrange=c(1e-3,1e3), fn=chisqr_PiecewiseLinAndExpFunction)
-# fit.draw(pars2$par, x=x, col="green", lines=TRUE, vlines=FALSE)
-
-#fit to omega:
-# pars3 <- fit.automaticRoutine(startparam=c(0.5, 0.005, 3, 0.5), x=x, y=y3, dy=y3err, xrange=c(1e-3,1e3), fn=chisqr_PiecewiseLinAndExpFunction)
-# fit.draw(pars3$par, x=x, col="blue", lines=FALSE, vlines=FALSE)
-
-# #fit to kappa:
-pars4 <- fit.automaticRoutine(startparam=c(3, 0.005, 0.1, 0.5), x=x, y=y4, dy=y4err, xrange=c(1e-3,1e2), fn=chisqr_PiecewiseLinAndExpFunction)
-fit.draw(pars4$par, x=x, col="black", lines=TRUE, vlines=FALSE)
+# Fit to kappa:
+parsk <- fit.automaticRoutine(startparam=c(3, 0.005, 0.1, 0.5), x=x, y=yk, dy=ykerr, xrange=c(1e-3,1e2), fn=chisqr_PiecewiseLinAndExpFunction)
+fit.draw(parsk$par, x=x, col="black", lines=TRUE, vlines=FALSE)
 
 print_fitRes <- function(varname, par, parErr) {
   cat("\nFit to ",varname,": \n")
-  cat("A1:    ", par$par[1], "\t +- " , parErr$A1err, "\n")
-  cat("x1:    ", par$par[2], "\t +- " , parErr$X1err, "\n")
-  cat("A2:    ", par$par[3], "\t +- " , parErr$A2err, "\n")
-  cat("x2:    ", par$par[4], "\t +- " , parErr$X2err, "\n")
-  cat("Chi^2: ", par$chi2/par$dof  , "\t +- " , parErr$chi2err,  "\t , p-value: ", par$pval, "\n")
+  cat("A1:        ", par$par[1], "\t +- " , parErr$A1err, "\n")
+  cat("x1:        ", par$par[2], "\t +- " , parErr$X1err, "\n")
+  cat("A2:        ", par$par[3], "\t +- " , parErr$A2err, "\n")
+  cat("x2:        ", par$par[4], "\t +- " , parErr$X2err, "\n")
+  cat("Chi^2/dof: ", par$chi2/par$dof  , "\t +- " , parErr$chi2err,  "\t , p-value: ", par$pval, "\n")
 }
-print_fitRes("q",pars1$par, pars1$parerr)
-# print_fitRes("lambda",pars2$par, pars2$parerr)
-# # print_fitRes("omega",pars3$par, pars3$parerr)
-print_fitRes("kappa",pars4$par, pars4$parerr)
+print_fitRes("q",parsq$par, parsq$parerr)
+print_fitRes("kappa",parsk$par, parsk$parerr)
 rm(print_fitRes)
 
-
 rm(resFrame)
-rm(x, xlim, ylim, y1, y1err, y2, y2err, y3, y3err, y4, y4err)
-rm(plt.data, dim, rho, vol, nPart)
-rm(pars1)
-
-# dev.off()
+rm(x, xlim, ylim, yq, yqerr, yk, ykerr)
+rm(plt.data, dim, rho, nPart)
+rm(parsq, parsk)
 ```
-
-```{r logistic_curve}
-x <- exp(log(10)*seq(from=-3, to=0, by=0.2))
-
-logistic <- function(par, x) {
-  return(par[1] / (1 + exp(-par[2] * (par[3]-x))))
-}
-
-y <- logistic(c(5, 500, 0.020), x)
-
-plot(x,y, type="b", log = "x")
-
-```
-
-
-
-```{r plot_orderParam}
-source("DataFrameHelper.R")
-load(file_name)
-# --------------------------------------------------------------------------------
-dim             <- 2   
-nPart           <- 50
-# --------------------------------------------------------------------------------
-colours <- c("red","green", "blue", "orange", "pink", "magenta")
-observables <- c("lambda", "omega", "q", "kappa")
-obs_id <- c(8,10,4,12)
-y_high <- c(40,2.2,15,3)
-
-z.rho  <- myGetRhoValues(dim=dim, nPart=nPart)
-xlim <- c(1e-4, 1e3)
-
-
-for (j in c(1:length(obs_id))) {
-  ylim <- c(0, y_high[j])
-  plot(NA, NA, xlim=xlim, ylim=ylim, type = "l", log="x", main = "", xlab = "T", ylab = observables[j])
-  
-  for (i in c(1:length(z.rho))) {
-    x.beta   <- myGetBetaValues (dim=dim, vol=nPart/z.rho[i], rho=z.rho[i])
-    plt.data <- myGetObservables(dim=dim, vol=nPart/z.rho[i], rho=z.rho[i], beta=x.beta)
-    
-    myPointsLinesErrorsData(1./plt.data$x, plt.data[[obs_id[j]]], plt.data[[obs_id[j]+1]], col=colours[i])
-    
-  }
-  legend("topright", legend=z.rho, col=colours, lty=1)  
-}
-
-# rm(resFrame)
-rm(dim, z.rho)
-```
-
-## deprecated
-
-```{r plot_results_with_fit}
-# --------------------------------------------------------------------------------
-# LOAD RESULTS DATA FRAME FROM DISK
-load(file_name)
-# --------------------------------------------------------------------------------
-# HYPERPARAMETERS:
-d               <- 1    # Number of dimensions
-particleDensity <- 0.5
-vol             <- 2e2  # Volume of space
-nPart <- ceiling(vol * particleDensity)  # Number of particles
-l     <- vol**(1/d)
-# --------------------------------------------------------------------------------
-
-param <- c(1,1) #slope, y-intercept initial values fit parameter, tbd
-
-# --------------------------------------------------------------------------------
-x.beta <- resFrame$beta[which(resFrame$dim==d & resFrame$vol==vol & resFrame$rho==particleDensity)]
-x.beta <- x.beta[!duplicated(x.beta)]
-x.beta <- sort(x.beta[!is.na(x.beta)])
-y.iat <- array(NA, dim= c(length(x.beta), 2)) # [,1]: IAT, [,2]: Standard Error
-
-for (i in c(1:length(x.beta))) {
-  idx <- which(resFrame$dim==d & resFrame$rho==particleDensity & resFrame$vol==vol & resFrame$beta==x.beta[i])
-  if (length(idx)!=0) {
-    y.iat[i,1] <- mean(resFrame$IAT[idx])
-    y.iat[i,2] <- getBootstrapMeanError(resFrame$IAT[idx])
-  }
-}
-
-#----------------------------------------------------------------------------------------------------------------
-#plot fit with error band:
-fit_range <- c(1e-4, 1e1)
-interval_fit <- which(x.beta>=fit_range[1] & x.beta<fit_range[2]) # interval in which a straight line is fitted, tbd
-res_fit <- myFit(param, x.beta[interval_fit], y.iat[interval_fit,1], y.iat[interval_fit,2]) #result parameters fit
-
-xvals <- exp(log(10)*seq(from=-4, to=5, length.out=46)) # x values
-xvals <- xvals[which(xvals>=fit_range[1] & xvals<fit_range[2])]
-fit_line <- res_fit$a*xvals + res_fit$b # fit line
-
-bpars <- myFitErrors(x.beta[interval_fit], y.iat[interval_fit,1], y.iat[interval_fit,2]) # bootstrap replicas for fit parameters
-
-Y <- apply(bpars[ , c(1:2)], MARGIN = 1, FUN = function(parameter, x){parameter[1]*x + parameter[2]}, x=xvals)
-dY <- apply(Y, MARGIN = 1, FUN = sd)
-
-plot(x=NA, y=NA, xlim=c(5e-5, 1e5), ylim = c(5e1, 1e5), log="xy", xlab="1/T", ylab="IAT")
-polygon(x = c(xvals, rev(xvals)), y = c(fit_line+dY, rev(fit_line-dY)), col = "green", border = "green")
-points(x = x.beta, y = y.iat[ ,1])
-arrows(x0=x.beta, y0=y.iat[ ,1]-y.iat[ ,2], x1=x.beta, y1=y.iat[ ,1]+y.iat[ ,2], angle=90, code=3, length=0.05)
-lines(x=xvals, y=fit_line)
-cat("Parameter a: ", res_fit$a, " +- ", sd(bpars[,1]), "\n")
-cat("Parameter b: ", res_fit$b, " +- ", sd(bpars[,2]), "\n")
-cat("Chisqr of fit: ", res_fit$chi2, "\n")
-#----------------------------------------------------------------------------------------------------------------
-
-rm(resFrame)
-rm(x.beta, y.iat, i, d, particleDensity, vol, nPart, l, idx)
-```
-
-
-```{r results_other_observables}
-nPart <- length(MCMC_Single_Run$X[,1])
-cat("nPart = ",nPart)
-
-mean_particle_dist <- mean(MCMC_Single_Run$ParticleDists)
-error_mean_particle_dist <- getBootstrapMeanError(MCMC_Single_Run$ParticleDists, replicaFactor = 3)
-
-mean_nearest_neigh_dist <- mean(MCMC_Single_Run$NearestNeighDists)
-error_mean_nearest_neigh_dist <- getBootstrapMeanError(MCMC_Single_Run$NearestNeighDists, replicaFactor = 3)
-
-mean_number_particles_direct_neigh <- mean(MCMC_Single_Run$NParticlesNeighbourhood)
-error_mean_number_particles_direct_neigh <- getBootstrapMeanError(MCMC_Single_Run$NParticlesNeighbourhood, replicaFactor = 3)
-```
-
-```{r}
-cat("Average Distance between all particles: ", mean_particle_dist, "+-" , error_mean_particle_dist, "\n")
-cat("Average Distance to nearest Neighbour: ", mean_nearest_neigh_dist, "+-" , error_mean_nearest_neigh_dist, "\n")
-cat("Average Number of Particles in direct Neighbourhood: ", mean_number_particles_direct_neigh, "+-" , error_mean_number_particles_direct_neigh, "\n")
-   
-hist(MCMC_Single_Run$ParticleDists)
-hist(MCMC_Single_Run$NearestNeighDists, breaks=50, freq = FALSE)
-hist(MCMC_Single_Run$NParticlesNeighbourhood, breaks=20)
-```
-
-
 
 
 ```{r plot_autocorrelation}

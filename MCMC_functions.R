@@ -181,8 +181,67 @@ gen_initConfig <- function(type="random", dim, vol, nPart, lc=1.5) {
   return(list(X0=X0, q=q))
 }
 
-print("Load MCMC_functions.cpp.\n")
-
-sourceCpp("MCMC_functions.cpp")
+myMCMCSwipe <- function(dim, nPart=0, rho=0, vol=0, sigma=1, sct="random", nIt=5e5, nResamples=1, x.beta, df) {
+  cat("Starting swipe of ",nPart," particles (RUN_ID ",run_no,") over ",length(x.beta)," points:\n")
+  
+  if      (nPart == 0 & vol!=0 & rho!=0) nPart <- ceiling(vol * rho)
+  else if (rho == 0 & vol!=0 & nPart!=0) rho <- nPart / vol
+  else if (vol == 0 & rho!=0 & nPart!=0) vol <- nPart / rho
+  
+  l     <- vol**(1/dim)
+  watch.records <- rep(NA, length(x.beta)) 
+  
+  for (i in c(1:length(x.beta))) {
+    cat("i:",i,"\t, ",log10(x.beta[i]),"   \t : ")
+    
+    watch.iter <- Sys.time()
+    for (j in c(1:nResamples)) {
+      cat(j, ", ")
+      
+      # Generate start configuration
+      init_config <- gen_initConfig(type=sct, dim=dim, vol=vol, nPart=nPart)
+      X0 <- init_config$X0
+      q  <- init_config$q
+      rm(init_config)
+      
+      
+      res <- MCMC_CPP(nIt, nPart, vol, 1/x.beta[i], sigma, N_burnIn=0, X0, q) # Make Markov Chain
+      
+      
+      # Calculate ovbservables
+      # iat <- IAT_CPP(res$E[c(1e5:nIt)])
+      iat <- 0
+      
+      # - - - - - - - - - SAVE RESULT TO FRAME
+      df <- rbind(
+        df, 
+        list(
+          "RUN_ID" = run_no,
+          "IAT"    = iat, 
+          "E_end"  = res$E[nIt], 
+          "lambda" = I(list(res$lambda)),
+          "omega"  = I(list(res$omega)),
+          "q"      = I(list(res$q)),
+          "kappa"  = I(list(res$kappa)),
+          "dim"    = dim,
+          "rho"    = rho,
+          "vol"    = vol,
+          "beta"   = x.beta[i],
+          "t"      = 1/x.beta[i],         
+          "nIt"    = nIt,
+          "nPart"  = nPart,
+          "X_end"  = NA
+        )
+      )
+      # - - - - - - - - - 
+    }
+    watch.records[i] <- as.double(Sys.time() - watch.iter, units='mins')
+    mins <- round(mean(watch.records[c(max(c(1,i-10)),i)])*(length(x.beta)-i) , 2)
+    secs <- (mins - floor(mins)) * 60
+    cat("ETA= ",floor(mins)," min ",secs," s \n")
+  }
+  
+  return(df)
+}
 
 print("Loaded MCMC_functions.R.\n")
