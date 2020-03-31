@@ -71,13 +71,6 @@ show_particles <- function(x, q, V){
     gg <- gg + geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2), size=0.5, data=data.frame(x1=-l/2,x2=-l/2,y1=-l/2,y2=+l/2))
     gg <- gg + geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2), size=0.5, data=data.frame(x1=+l/2,x2=+l/2,y1=-l/2,y2=+l/2))
     
-    # gg <- labs(
-      # subtitle="Area Vs Population", 
-      # y="Population", 
-      # x="Area", 
-      # title="Scatterplot", 
-      # caption = "Source: midwest")
-    
     gg <- gg + labs(x = "x-axis", y = "y-axis")
     
     plot(gg)
@@ -85,7 +78,6 @@ show_particles <- function(x, q, V){
   } else if (dim == 3) {
     ballradius <- 0.5
     
-    # rgl.open()
     open3d()
     plot3d(x=NA, y=NA, z=NA, xlim=c(-l/2,l/2),ylim=c(-l/2,l/2),zlim=c(-l/2,l/2), xlab="x-axis", ylab="y-axis", zlab="z-axis")
     spheres3d(x=posParticles[,1], y=posParticles[,2], z=posParticles[,3], col = "red",
@@ -94,9 +86,6 @@ show_particles <- function(x, q, V){
               radius=ballradius)
     
     rgl.viewpoint( theta = 240, phi = 10)
-    
-    # axes3d( edges=c("x++", "y++", "z"))
-    # title3d(xlab = "x-axis", ylab = "y-axis",zlab = "z-axis") 
     
   }
 }
@@ -244,4 +233,3 @@ myMCMCSwipe <- function(dim, nPart=0, rho=0, vol=0, sigma=1, sct="random", nIt=5
   return(df)
 }
 
-print("Loaded MCMC_functions.R.\n")

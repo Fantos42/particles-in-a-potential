@@ -175,8 +175,6 @@ std::vector<int> estimate_clstSize(std::vector<std::vector<double>> X) {
 std::vector<double> estimate_particle_dists(std::vector<std::vector<double>> X){
   const unsigned int nPart = X.size();
   const unsigned int d = X[0].size();
-  // double dist = 0;
-  // const double normalization = 2/nPart/(nPart-1);
   std::vector<double> particle_dist_vec;
   
   for(unsigned int i = 0; i < nPart; i++){
@@ -185,7 +183,6 @@ std::vector<double> estimate_particle_dists(std::vector<std::vector<double>> X){
       for(unsigned int dim = 0; dim < d; dim++){
         sum += (X[i][dim] - X[j][dim])*(X[i][dim] - X[j][dim]);
       }
-      // dist += sqrt(sum);
       particle_dist_vec.push_back(sqrt(sum));
     }
   }
@@ -196,7 +193,6 @@ std::vector<double> estimate_particle_dists(std::vector<std::vector<double>> X){
 std::vector<double> estimate_nearest_neighbour_dists(std::vector<std::vector<double>> X){
   const unsigned int nPart = X.size();
   double min_dist = 1e7;
-  // double sum_min_dists = 0;
   std::vector<double> min_dist_vec;
   
   for(unsigned int i = 0; i < nPart; i++){
@@ -205,7 +201,6 @@ std::vector<double> estimate_nearest_neighbour_dists(std::vector<std::vector<dou
       if(getDist(X[i], X[j]) < min_dist) min_dist = getDist(X[i], X[j]);
     }
     min_dist_vec.push_back(min_dist);
-    // sum_min_dists += min_dist;
   }
   
   return(min_dist_vec);
@@ -231,6 +226,10 @@ std::vector<int> estimate_Nparticles_neighbourhood(std::vector<std::vector<doubl
 // =======================================================
 // ========================================= MCMC_CPP
 // =======================================================
+// MCMC_CPP receives the exterior parameters and the initial particle configuration and runs the Markov chain algorithm.
+// Sigma is the standard deviation of the instrumental distribution for the Markov proposal. N_burnIn is the 
+// number of steps after which burn-in is assumed to be over. This is mostly irrelevant as the number of iteration
+// is set to be very high (~5e6) and only the last configuration is evaluated for statistical pruposes.
 // [[Rcpp::export]]
 Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, const double N_burnIn, NumericMatrix X0, NumericVector q){
   int d = X0(1,Rcpp::_).size();
@@ -350,8 +349,3 @@ Rcpp::List MCMC_CPP(int nIt, int nPart, double vol, double t, double sigma, cons
     );
   return rList;
 }
-
-
-/*** R
-print("Loaded MCMC_functions.cpp.")
-*/

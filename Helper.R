@@ -1,4 +1,5 @@
-myCreateNewFrame <- function(file_name) {
+# Frame Helper functions:
+frameHelper.createNewFrame <- function(file_name) {
   # !!!!!!!!!!!!! BE CAREFUL NOT TO OVERWRITE EXISTING DATA !!!!!!!!!!!!!!!!!
   
   # Columns:
@@ -40,7 +41,7 @@ myCreateNewFrame <- function(file_name) {
   rm(resFrame)
 }
 
-myShowContentOverview <- function(file_name) {
+frameHelper.showContentOverview <- function(file_name) {
   load(file_name)
 
   cat("This file contains the following parameter sets:\n")
@@ -78,21 +79,14 @@ myShowContentOverview <- function(file_name) {
   rm(v.dims, v.vol, v.rho, v.beta, c.d, c.v, c.r, N_beta, N_samples)
 }
 
-myGetBetaValues <- function(dim, vol, rho) {
+frameHelper.getBetaValues <- function(dim, vol, rho) {
   b <- resFrame$beta[which(resFrame$dim==dim & resFrame$vol==vol & resFrame$rho==rho)]
   b <- b[!duplicated(b)]
   b <- sort(b[!is.na(b)])
   return(b)
 }
 
-myGetRhoValues <- function(dim, nPart) {
-  r <- resFrame$rho[which(resFrame$dim==dim & resFrame$nPart==nPart)]
-  r <- r[!duplicated(r)]
-  r <- sort(r[!is.na(r)])
-  return(r)
-}
-
-myGetObservables <- function(dim, vol, rho, beta) {
+frameHelper.getObservables <- function(dim, vol, rho, beta) {
   
   y.iat <- array(NA, dim= c(length(beta), 2))
   y.q   <- array(NA, dim= c(length(beta), 2))
@@ -104,17 +98,8 @@ myGetObservables <- function(dim, vol, rho, beta) {
   for (i in c(1:length(beta))) {
     idx <- which(resFrame$dim==dim & resFrame$rho==rho & resFrame$vol==vol & resFrame$beta==beta[i])
     if (length(idx)!=0) {
-      # y.iat[i,1] <- mean(resFrame$iat[idx])
-      # y.iat[i,2] <- sqrt(var(resFrame$iat[idx]) / length(idx))
-      # y.iat[i,2] <- getBootstrapMeanError(resFrame$iat[idx], N_replicas = 10)
-      # temp <- as.vector(resFrame$q[[idx]])
-      # 
-      # y.q[i,1] <- mean(temp)
-      # y.q[i,2] <- sqrt(var(temp) / length(idx))
-      # y.q[i,2] <- getBootstrapMeanError(resFrame$q[idx], N_replicas = 100)
-
+  
       y.E[i,1] <- mean(resFrame$E_end[idx])
-      # y.E[i,2] <- sqrt(var(resFrame$E_end[idx]) / length(idx))
       y.E[i,2] <- getBootstrapMeanError(resFrame$E_end[idx], N_replicas = 100)
     
       qs <- numeric(0)
@@ -122,8 +107,7 @@ myGetObservables <- function(dim, vol, rho, beta) {
         qs <- c(qs, mean(resFrame$q[[idx[j]]]))
       }
       y.q[i,1] <- mean(qs)
-      # y.q[i,2] <- sqrt(var(qs))
-      y.q[i,2] <- sqrt(var(qs) / length(qs))
+      y.q[i,2] <- getBootstrapMeanError(qs, N_replicas = 100)
       rm(qs)
       
       omegas <- numeric(0)
@@ -131,9 +115,7 @@ myGetObservables <- function(dim, vol, rho, beta) {
         omegas <- c(omegas, mean(resFrame$omega[[idx[j]]]))
       }
       y.omega[i,1] <- mean(omegas)
-      # y.omega[i,2] <- sqrt(var(omegas))
-      y.omega[i,2] <- sqrt(var(omegas) / length(omegas))
-      # y.omega[i,2] <- getBootstrapMeanError(omegas, N_replicas = 100)
+      y.omega[i,2] <- getBootstrapMeanError(omegas, N_replicas = 100)
       rm(omegas)
       
       
@@ -142,9 +124,7 @@ myGetObservables <- function(dim, vol, rho, beta) {
         lambdas <- c(lambdas, mean(resFrame$lambda[[idx[j]]]))
       }
       y.lambda[i,1] <- mean(lambdas)
-      y.lambda[i,2] <- sqrt(var(lambdas) / length(lambdas))
-      # y.lambda[i,2] <- sqrt(var(lambdas))
-      # y.lambda[i,2] <- getBootstrapMeanError(lambdas, N_replicas = 100)
+      y.lambda[i,2] <- getBootstrapMeanError(lambdas, N_replicas = 100)
       rm(lambdas)
       
       
@@ -153,9 +133,7 @@ myGetObservables <- function(dim, vol, rho, beta) {
         kappas <- c(kappas, mean(resFrame$kappa[[idx[j]]]))
       }
       y.kappa[i,1] <- mean(kappas)
-      y.kappa[i,2] <- sqrt(var(kappas) / length(kappas))
-      # y.kappa[i,2] <- sqrt(var(kappas))
-      # y.kappa[i,2] <- getBootstrapMeanError(kappas, N_replicas = 100)
+      y.kappa[i,2] <- getBootstrapMeanError(kappas, N_replicas = 100)
       rm(kappas)
     }
   }
@@ -171,6 +149,8 @@ myGetObservables <- function(dim, vol, rho, beta) {
          )
 }
 
+
+# Drawing and plotting functions:
 myPlotData <- function(x, y, dy) {
   xlim <- c(1e-7, 1e7)
   xlim <- c(1e-3, 1e0)
@@ -193,7 +173,6 @@ draw.DataWithError <- function(x, y, dy, col="black", bars=TRUE, points=TRUE, li
 }
 
 
-
 # Error, Fit and Bootstrapping Functions
 getBootstrapMeanError <- function(data, N_replicas=100){
   N <- length(data)
@@ -205,37 +184,6 @@ getBootstrapMeanError <- function(data, N_replicas=100){
   st_error <- sd(mean_rep)
   return(st_error)
 }
-
-chisqr <- function(par, x, y, dy){
-  f <- par[1]*x + par[2]
-  return(sum((y-f)**2/dy**2))
-}
-
-myFit <- function(par, x, y, dy, fn){
-  myfit <- optim(par=par, fn=fn, y=y, dy=dy, x=x)
-  return(list(par=myfit$par, chi2=myfit$value))
-}
-
-myFitErrors <- function(x, y, dy){
-  N <- length(y)
-  N_replicas <- 1500
-  replicas <- array(data = NA, dim = c(N_replicas, N))
-  for (i in c(1:N)) {
-    replicas[ ,i] <- rnorm(n = N_replicas, mean=y[i], sd=dy[i])
-  }
-  #calculate best fit values (minimise chi2)
-  par <- c(1,0)
-  best_par <- array(data = NA, dim = c(N_replicas, length(par)+1))
-  for (j in c(1:N_replicas)) {
-    myfit <- optim(par = par, fn =chisqr, x=x, y=replicas[j, ], dy=dy)
-    best_par[j, c(1:length(par))] <- myfit$par
-    best_par[j, length(par)+1] <- myfit$value
-  }  
-  
-  return(best_par)
-}
-
-
 
 chisqr_PiecewiseLinAndExpFunction <- function(par, x, y, dy) {
   # par[1]=A1, par[2]=X1, par[3]=A2, par[4]=X2
@@ -274,12 +222,9 @@ fit.getErrors <- function(par, x, y, dy, fn){
   best_par <- array(data = NA, dim = c(N_replicas, length(par)+1))
   for (j in c(1:N_replicas)) {
     myfit <- optim(par = par, fn=fn, x=x, y=replicas[j, ], dy=dy)
-    # cat(myfit$value, "\n")
     best_par[j, c(1:length(par))] <- myfit$par
     best_par[j, length(par)+1] <- myfit$value
-    # cat(best_par[j, length(par)+1], "\n")
   }  
-  # print(sd(best_par[ ,5]))
   
   errors <- list(A1err=sd(best_par[ , 1]), X1err=sd(best_par[ ,2]), A2err=sd(best_par[ ,3]), X2err=sd(best_par[ ,4]), chi2err=sd(best_par[ ,5]))
   return(errors)
